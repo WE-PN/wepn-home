@@ -78,6 +78,11 @@ class OLED:
     def set_led_present(self, is_led_present):
         self.led_present = int(is_led_present)
 
+    def clear_screen(self):
+        if self.version==2:
+            image = Image.new("RGB", (240,240), "BLACK")
+            self.lcd.image(image,0,0)
+
     def display(self, strs, size):
         if (self.led_present == 0):
             with open(TEXT_OUT, 'w') as out:

@@ -86,8 +86,11 @@ class PProxy():
 
     def cleanup(self):
         self.logger.debug("PProxy shutting down.")
+        oled = OLED()
+        oled.clear_screen()
         if gpio_up:
             GPIO.cleanup()
+
 
 
     def set_logger(self, logger):
