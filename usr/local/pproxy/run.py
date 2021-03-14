@@ -27,6 +27,7 @@ config.read(CONFIG_FILE)
 status = configparser.ConfigParser()
 status.read(STATUS_FILE)
 oled.set_led_present(config.get('hw','led'))
+oled.clear_screen()
 oled.show_logo()
 time.sleep(1)
 
@@ -62,6 +63,7 @@ if 1 == int(status.get('status','claimed')):
         with open(STATUS_FILE, 'w') as statusfile:
            status.write(statusfile)
         #reboot to go into onboarding
+        oled.clear_screen()
         device.reboot()
 
     while True:

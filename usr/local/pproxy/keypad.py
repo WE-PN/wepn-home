@@ -132,15 +132,28 @@ class KEYPAD:
           return current
 
     def show_claim_info(self):
+            self.status.read(STATUS_FILE)
             current_key = self.status.get('status', 'temporary_key')
             serial_number = self.config.get('django','serial_number')
+            # ONLY FOR UX DEVELOPMENT, show the git hash
+            import subprocess
+            label = "production"
+            git_cmd = "git log -1 --format=format:\"%H\""
+            try:
+                label = subprocess.check_output(git_cmd.split()).strip()
+                label = label.decode("utf-8")[1:8]
+            except subprocess.CalledProcessError as e:
+                self.logger.error(e.output)
+                label = "no git hash"
             display_str = [(1, "Device Key:", 0,"blue"), (2,str(current_key),0,"white"), 
-                    (3, "Serial #",0,"blue"), (4, serial_number,0,"white"), ]
+                    (3, "Serial #",0,"blue"), (4, serial_number,0,"white"),
+                    (3, "Label UX-Dev",0,"blue"), (4,label,0,"white"), ]
             self.lcd.display(display_str, 20)
             time.sleep(15)
             self.render(0)
 
     def show_claim_info_qrcode(self):
+            self.status.read(STATUS_FILE)
             current_key = self.status.get('status', 'temporary_key')
             serial_number = self.config.get('django','serial_number')
             display_str = [(1, "https://red.we-pn.com/?s="+
@@ -186,7 +199,7 @@ class KEYPAD:
             except ProcessLookupError as process_error:
                 self.logger.error("Could not find the process for main wepn: "+str(wepn_pid)+":" + str(process_error))
 
-def main():
+if __name__=='__main__':
     status = configparser.ConfigParser()
     status.read(STATUS_FILE)
 
@@ -205,6 +218,3 @@ def main():
         current = keypad.get(current)
         if current != prev_current:
             keypad.render(current)
-
-if __name__=='__main__':
-    main()
