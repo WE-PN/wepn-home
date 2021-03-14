@@ -5,7 +5,8 @@ from setup.onboard import OnBoard
 import requests, json
 import logging.config
 from device import Device
-
+import board
+import adafruit_dotstar as dotstar
 
 try:
     from self.configparser import configparser
@@ -20,6 +21,8 @@ logging.config.fileConfig(LOG_CONFIG,
 logger = logging.getLogger("startup")
 logger.critical("Starting WEPN")
 
+dots = dotstar.DotStar(board.D6, board.D5, 3, brightness=0.2)
+
 oled = OLED()
 
 config = configparser.ConfigParser()
@@ -29,7 +32,36 @@ status.read(STATUS_FILE)
 oled.set_led_present(config.get('hw','led'))
 oled.clear_screen()
 oled.show_logo()
-time.sleep(1)
+
+dots.fill((255,0,0))
+time.sleep(0.1)
+dots.fill((180,75,0))
+time.sleep(0.1)
+dots.fill((105,150,0))
+time.sleep(0.1)
+dots.fill((30,225,0))
+time.sleep(0.1)
+dots.fill((105,150,0))
+time.sleep(0.1)
+dots.fill((0,240,15))
+time.sleep(0.1)
+dots.fill((0, 165, 90))
+time.sleep(0.1)
+dots.fill((0, 90, 165))
+time.sleep(0.1)
+dots.fill((0, 15, 240))
+time.sleep(0.1)
+dots.fill((60, 0, 195))
+time.sleep(0.1)
+dots.fill((105, 0, 150))
+time.sleep(0.1)
+dots.fill((180, 0, 75))
+time.sleep(0.1)
+dots.fill((255, 0, 30))
+time.sleep(0.1)
+dots.fill((0, 0, 0))
+
+
 
 device = Device(logger)
 gateway_vendor = device.get_default_gw_vendor()
