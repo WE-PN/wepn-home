@@ -38,3 +38,5 @@ spidev
 qrcode
 adafruit-circuitpython-busdevice
 adafruit-circuitpython-dotstar
+soundcard
+soundfile

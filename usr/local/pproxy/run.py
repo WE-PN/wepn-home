@@ -25,6 +25,7 @@ logger.critical("Starting WEPN")
 
 dots = dotstar.DotStar(board.D6, board.D5, 3, brightness=0.2)
 
+device = Device(logger)
 oled = OLED()
 
 config = configparser.ConfigParser()
@@ -36,7 +37,7 @@ oled.clear_screen()
 time.sleep(1)
 oled.show_logo()
 # demo of audio for UX development
-os.system("aplay -Dhw:1 " + SHOW_LOGO_AUDIO_FILE + "&")
+device.play_audio(SHOW_LOGO_AUDIO_FILE)
 time.sleep(2)
 
 # Demo of LEDs for UX development
@@ -70,7 +71,6 @@ dots.fill((0, 0, 0))
 
 
 
-device = Device(logger)
 gateway_vendor = device.get_default_gw_vendor()
 logger.critical("Gateway vendor= " + str(gateway_vendor))
 device.check_port_mapping_igd()
