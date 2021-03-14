@@ -192,7 +192,7 @@ class OnBoard():
             time.sleep(2)
             self.save_state("0",0)
             led.show_logo()
-            os.system("aplay -Dhw:1 " + SHOW_LOGO_AUDIO_FILE + " &")
+            self.device.play_audio(SHOW_LOGO_AUDIO_FILE)
             display_str = [(1, "",0,"black"), ]
             time.sleep(2)
             led.display(display_str, 20)
@@ -219,7 +219,7 @@ class OnBoard():
              self.client.loop_stop()
              self.unclaimed = False
              device = Device(self.logger)
-             os.system("aplay -Dhw:1 " + CLAIM_SUCCESS_AUDIO_FILE + "&")
+             device.play_audio(CLAIM_SUCCESS_AUDIO_FILE)
              device.restart_pproxy_service()
 
     def on_message(self, client, userdata, msg):
@@ -243,7 +243,7 @@ class OnBoard():
             self.save_temp_key()
         self.oled.set_logo_text("loading ...", 45, 200, "red", 25)
         time.sleep(1)
-        os.system("aplay -Dhw:1 " + SCAN_AUDIO_FILE + "&")
+        self.device.play_audio(SCAN_AUDIO_FILE)
         self.oled.show_logo()
         time.sleep(10)
         self.display_claim_info()

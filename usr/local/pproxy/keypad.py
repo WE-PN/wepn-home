@@ -161,11 +161,18 @@ class KEYPAD:
             self.lcd.display(display_str, 20)
 
     def restart(self):
+        self.lcd.set_logo_text("Rebooting ...", 55, 200, "red", 25)
+        self.lcd.show_logo()
+        time.sleep(1)
         self.device.reboot()
         pass
 
     def power_off(self):
+        self.lcd.set_logo_text("Powering off ...", 50, 200, "red", 25)
+        self.lcd.show_logo()
+        time.sleep(1)
         self.device.turn_off()
+        self.lcd.clear_screen()
         pass
 
     def run_diagnostics(self):

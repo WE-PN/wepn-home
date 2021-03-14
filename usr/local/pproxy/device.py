@@ -9,6 +9,11 @@ import logging.config
 import netifaces
 import atexit
 import upnpclient as upnp
+import os
+try:
+    import soundfile, soundcard
+except Exception as err:
+    print("error in audio init: " + str(err))
 try:
     from self.configparser import configparser
 except ImportError:
@@ -307,3 +312,13 @@ class Device():
             return '0.0.0.0'
     def get_default_gw_vendor(self):
         return self.get_default_gw_mac()[:8]
+
+    def play_audio(self, file_path, sample_rate=24000):
+        try:
+            default_speaker = sc.default_speaker()
+            data, fs = sf.read(file_path, dtype='float32')
+            default_speaker.play(data, samplerate=sample_rate)
+        except Exception as e:
+            # use old school methods now
+            os.system("aplay " + file_path + "&")
+            self.logger.critical(type(e).__name__ + ': ' + str(e))
