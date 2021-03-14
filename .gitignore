@@ -16,3 +16,4 @@ __pycache__/
 .config
 .gitconfig
 .python_history
+.selected_editor
