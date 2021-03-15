@@ -22,6 +22,8 @@
 # m h  dom mon dow   command
 */15 * * * * /usr/bin/python3 /usr/local/pproxy/periodic/send_heartbeat.py >/dev/null 2>&1 
 */15 * * * * /bin/bash /usr/local/pproxy/periodic/cron-upnp.sh >/dev/null 2>&1
+# UX development: regularly sync with ux-development branch of the git
+15 */4 * * *  /bin/bash /var/local/pproxy/git/sync.sh
 @weekly sudo /usr/local/sbin/update-pproxy.sh >/dev/null 2>&1
 #daily while rollout in progress
 @daily sudo /usr/local/sbin/update-pproxy.sh >/dev/null 2>&1
