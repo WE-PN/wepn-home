@@ -31,6 +31,7 @@ from diag import WPDiag
 from services import Services
 from device import Device
 import string
+import RPi.GPIO as GPIO
 
 COL_PINS = [26] # BCM numbering
 ROW_PINS = [19,13,6] # BCM numbering
@@ -235,13 +236,12 @@ class OnBoard():
         if not run_once:
             self.generate_rand_key()
             self.save_temp_key()
-        self.oled.set_logo_text("loading ...", 45, 200, "red", 25)
+        self.oled.set_logo_text("loading ...", 50, 200, "red", 25)
+        self.oled.show_logo()
+        time.sleep(5)
+        self.display_claim_info()
         time.sleep(1)
         self.device.play_audio(SCAN_AUDIO_FILE)
-        self.oled.show_logo()
-        time.sleep(10)
-        self.display_claim_info()
-        #display_str = [(1, "Device Key:", 0,"blue"), (2, str(self.rand_key), 0,"white"), (3, "https://youtu.be/jYgeDSG9G0A wepn://s=SERIAL&k=JEY", 2, "white")]
         self.client = mqtt.Client(self.config.get('mqtt', 'username'), clean_session=True)
         # TODO: to log this effectively for error logs,
         # instead of actual key save a hash of it to the log file. This way WEPN staff can
@@ -281,7 +281,8 @@ class OnBoard():
                         (2, "Network error,",0,"red"), (3, "check cable...", 0,"red") ]
                 self.oled.display(display_str, 18)
                 if (int(self.config.get('hw','buttons'))):
-                    keypad.cleanup()
+                    if int(self.config.get("hw","led-version")) == 1:
+                        keypad.cleanup()
                     GPIO.cleanup()
 
                 time.sleep(int(self.config.get('mqtt', 'onboard-timeout')))
@@ -292,5 +293,6 @@ class OnBoard():
                     run_once_done = True
 
         if (int(self.config.get('hw','buttons'))):
-            keypad.cleanup()
+            if int(self.config.get("hw","led-version")) == 1:
+                keypad.cleanup()
             GPIO.cleanup()

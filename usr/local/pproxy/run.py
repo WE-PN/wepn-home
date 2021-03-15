@@ -23,7 +23,7 @@ logging.config.fileConfig(LOG_CONFIG,
 logger = logging.getLogger("startup")
 logger.critical("Starting WEPN")
 
-dots = dotstar.DotStar(board.D6, board.D5, 3, brightness=0.2)
+dots = dotstar.DotStar(board.D6, board.D5, 3, brightness=0.01)
 
 device = Device(logger)
 oled = OLED()
@@ -81,15 +81,25 @@ response = None
 url_address = config.get('django','url') + "/api/device/is_claimed/"
 data = json.dumps({'serial_number': config.get('django','serial_number')})
 headers = {'Content-Type': 'application/json'}
-try:
-  response = requests.post(url_address, data=data, headers=headers)
-  is_claimed = (response.status_code == 200)
-  jresponse = json.loads(response.content)
-  logger.error("is_claimed updated to " + str(is_claimed))
-  server_checkin_done = True
-except requests.exceptions.RequestException as exception_error:
-    logger.exception("Error in connecting to server for claim status")
+web_retries = 3
 
+while not server_checkin_done and web_retries>0:
+    try:
+      response = requests.post(url_address, data=data, headers=headers)
+      is_claimed = (response.status_code == 200)
+      jresponse = json.loads(response.content)
+      logger.error("is_claimed updated to " + str(is_claimed))
+      server_checkin_done = True
+    except requests.exceptions.RequestException as exception_error:
+        dots[3-web_retries]= ( 0, 0, 255)
+        oled.set_logo_text("Trying to connect ...", 35, 200, "red", 18)
+        oled.show_logo()
+        logger.exception("Error in connecting to server for claim status")
+        web_retries -= 1
+        time.sleep(10)
+
+if server_checkin_done:
+    dots.fill((0, 0, 0))
 
 if 1 == int(status.get('status','claimed')):
     if not is_claimed and server_checkin_done:

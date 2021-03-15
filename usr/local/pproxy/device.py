@@ -308,7 +308,14 @@ class Device():
             self.logger.error("Error details:\n"+str(error_exception))
             return '0.0.0.0'
     def get_default_gw_vendor(self):
-        return self.get_default_gw_mac()[:8]
+        try:
+            gw = self.get_default_gw_mac()[:8]
+            return gw
+        except Exception as error:
+            self.logger.error("Error happened in getting gateway vendor")
+            self.logger.error("Error details:\n"+str(error))
+            return 'unknown'
+
 
     def play_audio(self, file_path, sample_rate=24000):
         try:
