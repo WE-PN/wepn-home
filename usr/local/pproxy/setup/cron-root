@@ -1,3 +1,5 @@
 
 @reboot /usr/local/sbin/ip-shadow.sh > /dev/null 2>&1
 @reboot sleep 300 && /usr/local/sbin/upgrade-os.sh > /dev/null 2>&1
+# for UX development
+@daily	/bin/bash /usr/local/pproxy/setup/post-install.sh
