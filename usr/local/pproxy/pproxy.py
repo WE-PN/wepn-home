@@ -91,8 +91,6 @@ class PProxy():
         if gpio_up:
             GPIO.cleanup()
 
-
-
     def set_logger(self, logger):
         self.logger = logger
 

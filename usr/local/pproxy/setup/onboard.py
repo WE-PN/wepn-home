@@ -290,7 +290,6 @@ class OnBoard():
                         keypad.cleanup()
                     if gpio_up:
                         GPIO.cleanup()
-
                 time.sleep(int(self.config.get('mqtt', 'onboard-timeout')))
                 self.client.loop_stop()
                 #raise
