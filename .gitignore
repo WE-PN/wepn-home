@@ -17,3 +17,6 @@ __pycache__/
 .gitconfig
 .python_history
 .selected_editor
+
+
+local_test_config.ini
