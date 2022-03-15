@@ -7,6 +7,8 @@ import os
 import re
 import atexit
 import logging.config
+import threading
+
 
 try:
     from self.configparser import configparser
@@ -287,7 +289,9 @@ class PProxy():
         # if device has too many friends,
         # sending heartbeat might take too long and make MQTT fail
         # hence the False parameter for hb_send
-        self.save_state("2", 1, False)
+        # self.save_state("2", 1, False)
+        th = threading.Thread(target=self.save_state, args=("2", 1))
+        th.start()
 
     # prevent directory traversal attacks by checking final path
 
@@ -306,6 +310,10 @@ class PProxy():
             data = json.loads(msg.payload)
         except:
             data = json.loads(msg.payload.decode("utf-8"))
+        th = threading.Thread(target=self.on_message_handler, args=(data,))
+        th.start()
+
+    def on_message_handler(self, data):
         services = Services(self.loggers['services'])
         unsubscribe_link = None
         send_email = True
