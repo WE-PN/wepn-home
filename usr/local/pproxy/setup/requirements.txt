@@ -208,3 +208,4 @@ webencodings
 Werkzeug
 wrapt
 zipp
+fonttools>=4.43.0 # not directly required, pinned by Snyk to avoid a vulnerability
