@@ -17,6 +17,7 @@
 # apt-get update && apt-get upgrade -y
 # apt-get install wireguard
 
+wg-quick down wg0
 PORT=`cat /etc/pproxy/config.ini  | grep wireport | awk '{print $3}'`
 PORT=${ORPORT:=6711}
 
@@ -36,7 +37,7 @@ cat > /etc/wireguard/wg0.conf << EOF
 
 [Interface]
 PrivateKey = $PRIV_SERVER
-Address = 10.0.0.1/24
+Address = 10.93.76.1/24
 ListenPort = $PORT
 PostUp = iptables -I INPUT -p udp --dport $PORT -j ACCEPT
 PostUp = iptables -I FORWARD -i eth0 -o wg0 -j ACCEPT
