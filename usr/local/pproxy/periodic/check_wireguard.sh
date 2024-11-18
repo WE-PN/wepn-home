@@ -12,10 +12,11 @@ max_retries=3
 # Check initial internet connection
 if ! is_connected; then
   # Find active WireGuard interfaces
-  wg_interfaces=$(ip link show | grep -E '^wg[0-9]+:' | awk '{print $2}')
+  wg_interfaces=$(ip link show | grep -E 'wg[0-9]+:' | awk '{print $2}' | sed 's/://')
 
   # Loop for retries
   for attempt in $(seq 1 $max_retries); do
+    echo "attempt $attempt"
     # Check each WireGuard interface
     for wg_interface in $wg_interfaces; do
       echo "Testing interface $wg_interface..."
