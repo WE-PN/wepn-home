@@ -107,6 +107,23 @@ class PProxy():
     def sanitize_str(self, str_in):
         return (shlex.quote(str_in))
 
+    def get_server_public_address(self):
+        ip_address = self.sanitize_str(ipw.myip())
+        if self.config.has_section(
+                "dyndns") and self.config.getboolean('dyndns', 'enabled'):
+            # we have good DDNS, lets use it
+            server_address = self.config.get("dyndns", "hostname")
+        else:
+            server_address = ip_address
+        return server_address
+
+    def get_tunnel_from_data(self, data):
+        if "config" in data and "tunnel" in data["config"]:
+            tunnel = data["config"]["tunnel"]
+        else:
+            tunnel = "all"
+        return tunnel
+
     def save_state(self, new_state, lcd_print=0, hb_send=True):
         self.status.reload()
         self.status.set('state', new_state)
@@ -349,7 +366,14 @@ class PProxy():
                 + us_uuid + "&subscribe=" + us_flag + "&did=" + self.config.get('django', 'id')
             # print(unsubscribe_link)
 
-        if (data['action'] == 'add_user'):
+        if (data['action'] == 'get-access-link'):
+            cname = self.sanitize_str(data['cert_name'])
+            short_link = services.get_short_link_text(cname,
+                                                      self.get_server_public_address,
+                                                      self.get_tunnel_from_data(data))
+            if short_link != "" and self.messages.e2ee_available():
+                self.messages.send_msg(short_link, cert_id=cname, secure=True, msg_type="response-access-link")
+        elif (data['action'] == 'add_user'):
             txt = None
             try:
                 self.logger.debug("before lock acquired")
@@ -360,10 +384,8 @@ class PProxy():
                 lock.acquire()
                 self.logger.debug("lock acquired")
                 username = self.sanitize_str(data['cert_name'])
-                if "config" in data and "tunnel" in data["config"]:
-                    tunnel = data["config"]["tunnel"]
-                else:
-                    tunnel = "all"
+                server_address = self.get_server_public_address()
+                tunnel = self.get_tunnel_from_data(data)
                 try:
                     # extra sanitization to avoid path injection
                     lang = re.sub(r'\\\\/*\.?', "",
@@ -372,13 +394,6 @@ class PProxy():
                     lang = 'en'
                 self.logger.debug("Adding user: " + username +
                                   " with language:" + lang + " to " + tunnel)
-                ip_address = self.sanitize_str(ipw.myip())
-                if self.config.has_section(
-                        "dyndns") and self.config.getboolean('dyndns', 'enabled'):
-                    # we have good DDNS, lets use it
-                    server_address = self.config.get("dyndns", "hostname")
-                else:
-                    server_address = ip_address
                 password = random.SystemRandom().randint(1111111111, 9999999999)
                 if 'passcode' in data and 'email' in data:
                     if data['passcode'] and data['email']:
@@ -398,7 +413,7 @@ class PProxy():
                     if not is_new_user:
                         # getting an add for existing user? should be an ip change
                         self.logger.debug("Update IP")
-                        self.device.update_dns(ip_address)
+                        self.device.update_dns(ipw.myip())
                     else:
                         # light up ring LEDs in blue with fill pattern
                         self.leds.fill_upto(color=(0, 0, 255),
@@ -445,11 +460,8 @@ class PProxy():
                 self.logger.error("username to be removed was empty")
                 return
             self.logger.debug("Removing user: " + username)
-            if "config" in data and "tunnel" in data["config"]:
-                tunnel = data["config"]["tunnel"]
-            else:
-                tunnel = "all"
-            ip_address = ipw.myip()
+            tunnel = self.get_tunnel_from_data(data)
+            server_address = self.get_server_public_address()
             try:
                 # show a blue led ring fill down pattern when
                 # deleting a friend
@@ -469,14 +481,14 @@ class PProxy():
                                send_to=data['email'],
                                subject="Your VPN details",
                                # 'Familiar phrase is '+ data['passcode'] +
-                               text='\nAccess to VPN server IP address ' + ip_address + ' is revoked.',
+                               text='\nAccess to VPN server IP address ' + server_address + ' is revoked.',
                                # '<p>Familiar phrase is <b>'+ data['passcode'] + '</b></p>'+
-                               html="<p>Access to VPN server IP address <b>" + ip_address +
+                               html="<p>Access to VPN server IP address <b>" + server_address +
                                     "</b> is revoked.</p>",
                                files_in=None,
                                unsubscribe_link=None)  # at this point, friend is removed from backend db
             # alse send a message to the app via Messaging API
-            self.messages.send_msg("deleted user " + str(username) + " from " + str(ip_address), cert_id=username, secure=False, msg_type="user_deleted")
+            self.messages.send_msg("deleted user " + str(username) + " from " + str(server_address), cert_id=username, secure=False, msg_type="user_deleted")
         elif (data['action'] == 'reboot_device'):
             self.save_state("3")
             self.device.reboot()
