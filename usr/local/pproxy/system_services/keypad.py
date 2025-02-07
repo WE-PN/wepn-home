@@ -717,30 +717,36 @@ class KEYPAD:
 
     def toggle_ssh_server(self):
         current = self.device.is_ssh_service_running()
-        self.lcd.long_text("Working on SSH")
+        self.menu[6][1]["text"] = "SSH: updating"
+        self.render()
         self.device.set_sshd_service(not current)
         time.sleep(2)
         for i in range(10):
             if self.device.is_ssh_service_running() != current:
                 break
             time.sleep(5)
-            self.lcd.long_text("Working" + ("." * i))
+            self.menu[6][1]["text"] = "SSH: " + ("." * i)
+            self.render()
         self.device.generate_ssh_host_keys()
         self.update_ssh_remote_status()
 
     def toggle_remote_ssh_session(self):
-        self.lcd.long_text("Working on Remote SSH")
         remote_running = self.device.is_remote_session_running()
         ssh_running = self.device.is_ssh_service_running()
         (future_remote, future_ssh) = (remote_running, ssh_running)
+        self.menu[6][2]["text"] = "Remote: updating"
         if not remote_running:
             future_remote = True
             # if session is not running, start
             if not ssh_running:
                 future_ssh = True
                 # if local ssh server is off, first turn it on
+                self.menu[6][1]["text"] = "SSH: updating"
+                self.render()
                 self.device.generate_ssh_host_keys()
                 self.device.set_sshd_service(True)
+            else:
+                self.render()
             # ssh to the remote server, open local port
             # note: the remote server is exclusively for this
             # connect to relay.we-pn.com
@@ -748,10 +754,15 @@ class KEYPAD:
         else:
             future_remote = False
             # Disabling SSH serve would NOT terminate session too
+            self.menu[6][2]["text"] = "Remote: updating"
+            self.render()
             self.device.set_remote_ssh_session(enabled=False)
         time.sleep(2)
         for i in range(10):
-            self.lcd.long_text("Working" + ("." * i))
+            if future_ssh != ssh_running:
+                self.menu[6][1]["text"] = "SSH: " + ("." * i)
+            self.menu[6][2]["text"] = "Remote: " + ("." * i)
+            self.render()
             if (self.device.is_ssh_service_running() == future_ssh
                     and self.device.is_remote_session_running() == future_remote):
                 break

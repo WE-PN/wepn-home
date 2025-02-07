@@ -6,7 +6,7 @@
 //#define DEBUG
 #define SRV_CNT 6
 #define CMD_CNT 6
-#define SPECIAL_CMD_CNT 20
+#define SPECIAL_CMD_CNT 21
 
 char* _sanitize(char input[], short type) {
 	static char ok_chars[] = "abcdefghijklmnopqrstuvwxyz"
