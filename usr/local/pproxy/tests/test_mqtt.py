@@ -33,7 +33,7 @@ print("fakes")
 print(fake_msg.topic + " abc")
 fake_msg.payload =json.dumps("{'action':'haha'}").encode('utf-8')
 print("ll" + fake_msg.payload.decode("utf-8"))
-exit()
+#exit()
 
 class MQTTTest():
     USER = None
@@ -97,6 +97,7 @@ class MQTTTest():
 
         steps = [("forcewrongpass", False),
                  (self.PASS, True)]
+        # steps = [(self.PASS, True)]
         self.number_runs = len(steps)
         # self.client.enable_logger()
         print("-------------------------------------------------------")

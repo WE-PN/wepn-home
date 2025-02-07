@@ -847,6 +847,19 @@ class Device():
                 except psutil.ZombieProcess:
                     pass
 
+    def is_ssh_service_running(self):
+        for p in psutil.process_iter():
+            try:
+                if p.name() == "sshd":
+                    if p.cmdline()[1] == "/usr/sbin/sshd":
+                        return True
+            except psutil.ZombieProcess:
+                pass
+            except Exception:
+                self.logger.exception("Unknown error in is_ssh_service_running.")
+                pass
+        return False
+
     def is_remote_session_running(self):
         found = False
         for i in psutil.process_iter():

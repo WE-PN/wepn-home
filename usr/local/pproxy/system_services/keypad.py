@@ -699,25 +699,46 @@ class KEYPAD:
         self.render()
         self.show_claim_info()
 
-    def toggle_ssh_server(self):
-        self.lcd.long_text("Working on SSH")
-        ssh_server = "ON"
-        if self.device.is_service_active(b'ssh.service'):
-            ssh_server = "OFF"
-        self.menu[6][1]["text"] = "SSH: " + ssh_server
-        self.device.generate_ssh_host_keys()
-        self.device.set_sshd_service(not
-                                     self.device.is_service_active(b'ssh.service'))
+    def update_ssh_remote_status(self):
+        ssh_running = self.device.is_ssh_service_running()
+        if ssh_running:
+            ssh_text = "ON"
+        else:
+            ssh_text = "OFF"
+        remote_status = self.device.is_remote_session_running()
+        if remote_status:
+            remote_text = "ON"
+        else:
+            remote_text = "OFF"
+
+        self.menu[6][1]["text"] = "SSH: " + ssh_text
+        self.menu[6][2]["text"] = "Remote: " + remote_text
         self.render()
+
+    def toggle_ssh_server(self):
+        current = self.device.is_ssh_service_running()
+        self.lcd.long_text("Working on SSH")
+        self.device.set_sshd_service(not current)
+        time.sleep(2)
+        for i in range(10):
+            if self.device.is_ssh_service_running() != current:
+                break
+            time.sleep(5)
+            self.lcd.long_text("Working" + ("." * i))
+        self.device.generate_ssh_host_keys()
+        self.update_ssh_remote_status()
 
     def toggle_remote_ssh_session(self):
         self.lcd.long_text("Working on Remote SSH")
-        if not self.device.is_remote_session_running():
+        remote_running = self.device.is_remote_session_running()
+        ssh_running = self.device.is_ssh_service_running()
+        (future_remote, future_ssh) = (remote_running, ssh_running)
+        if not remote_running:
+            future_remote = True
             # if session is not running, start
-            if not self.device.is_service_active(b'ssh.service'):
+            if not ssh_running:
+                future_ssh = True
                 # if local ssh server is off, first turn it on
-                self.menu[6][1]["text"] = "SSH: ON"
-                self.menu[6][2]["text"] = "Remote: ON"
                 self.device.generate_ssh_host_keys()
                 self.device.set_sshd_service(True)
             # ssh to the remote server, open local port
@@ -725,16 +746,17 @@ class KEYPAD:
             # connect to relay.we-pn.com
             self.device.set_remote_ssh_session(enabled=True)
         else:
-            # Provider might have enabled SSH server before
-            # To be safe we will turn that off too, worst case they
-            # will need to enable manually again.
-            self.menu[6][1]["text"] = "SSH: OFF"
-            self.menu[6][2]["text"] = "Remote: OFF"
-            self.device.set_sshd_service(False)
+            future_remote = False
             # Disabling SSH serve would NOT terminate session too
             self.device.set_remote_ssh_session(enabled=False)
-
-        self.render()
+        time.sleep(2)
+        for i in range(10):
+            self.lcd.long_text("Working" + ("." * i))
+            if (self.device.is_ssh_service_running() == future_ssh
+                    and self.device.is_remote_session_running() == future_remote):
+                break
+            time.sleep(5)
+        self.update_ssh_remote_status()
 
 
 def main():
