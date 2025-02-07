@@ -673,8 +673,10 @@ class Device():
                         lcd.long_text(
                             "Is network cable connected? Searching for updates.", "M", "red")
                     elif not self.reached_repo:
-                        lcd.long_text(
-                            "Device cannot reach the internet. Are cables plugged in?", "X", "red")
+                        # check again if connected to the internet
+                        if not self.wait_for_internet(10, 10):
+                            lcd.long_text(
+                                "Device cannot reach the internet. Are cables plugged in?", "X", "red")
                 self.execute_setuid("1 3")  # run pproxy-update detached
                 time.sleep(30)
 
