@@ -635,10 +635,11 @@ class Device():
                     if process_name.lower() in c.lower():
                         self.logger.debug("Found process: " + str(proc.cmdline()))
                         return True
-            # except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                pass
             except:
                 self.logger.exception("Exception handling processes")
-                return False
+                pass
         return False
 
     def is_process_running_pid(self, pid):
@@ -650,6 +651,8 @@ class Device():
             try:
                 if (proc.pid == pid):
                     return proc.cmdline()
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                pass
             except:
                 self.logger.exception("Exception in finding process cmd from pid")
                 return [""]
@@ -846,7 +849,7 @@ class Device():
                         for c in proc.cmdline():
                             if c == "remote@relay.we-pn.com":
                                 proc.kill()
-                except psutil.ZombieProcess:
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                     pass
 
     def is_ssh_service_running(self):
@@ -855,7 +858,7 @@ class Device():
                 if p.name() == "sshd":
                     if p.cmdline()[1] == "/usr/sbin/sshd":
                         return True
-            except psutil.ZombieProcess:
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 pass
             except Exception:
                 self.logger.exception("Unknown error in is_ssh_service_running.")
@@ -870,7 +873,7 @@ class Device():
                     for c in i.cmdline():
                         if c == "remote@relay.we-pn.com":
                             found = True
-                except psutil.ZombieProcess:
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                     pass
         return found
 
