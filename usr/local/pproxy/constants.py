@@ -3,7 +3,7 @@ DEFAULT_GET_TIMEOUT = 10
 DEFAULT_UPNP_TIMEOUT = 86400
 FORCE_SCREEN_ON = False
 HEALTHY_DIAG_CODE = 127
-LOG_CONFIG = "/etc/pproxy/logging-debug.ini"
+LOG_CONFIG = "/etc/pproxy/logging.ini"
 SKIP_OTA_CHECK = False
 CONNECTIVITY_TEST_URLS = [
     "https://status.we-pn.com",
