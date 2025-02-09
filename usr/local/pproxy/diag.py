@@ -81,12 +81,15 @@ class WPDiag:
         while not self.shutdown_listener:
             if int(time.time()) - start > 120:
                 self.shutdown_listener = True
-            self.logger.info('waiting ... ')
-            conn, addr = s.accept()
-            self.logger.info('Connected by ' + str(addr[0]))
-            data = conn.recv(8)
-            conn.sendall(data)
-            conn.close()
+            self.logger.info(f'waiting on port {port}... ')
+            try:
+                conn, addr = s.accept()
+                self.logger.info(f"Connected by {addr[0]} to port {port}")
+                data = conn.recv(8)
+                conn.sendall(data)
+                conn.close()
+            except TimeoutError:
+                self.logger.debug(f"listener timed out for port {port}")
 
     def open_test_port(self, port):
         self.shutdown_listener = False
@@ -159,18 +162,18 @@ class WPDiag:
         try:
             response = requests.post(url, data=data_json, headers=headers, timeout=GET_TIMEOUT)
             self.logger.debug(
-                "Response to port check request" + str(response.status_code))
+                "Response to port check request " + str(response.status_code))
             resp = response.json()
-            self.logger.error("response: \r\n\t" + str(resp))
+            self.logger.error("response: " + str(resp))
             experiment_num = resp['id']
         except requests.exceptions.RequestException as exception_error:
             self.logger.error(
                 "Error in sending portcheck request: \r\n\t" + str(exception_error))
-            self.logger.error("response: \r\n\t" + str(resp))
+            self.logger.error("response: " + str(resp))
         except KeyError as key_missing_err:
             self.logger.error(
                 "Error in gettin the resonse: \r\n\t" + str(key_missing_err))
-            self.logger.error("response: \r\n\t" + str(resp))
+            self.logger.error("response: " + str(resp))
         except Exception as err:
             self.logger.error("Uncaught error in request_port_check" + str(err))
         return experiment_num
@@ -225,7 +228,7 @@ class WPDiag:
                 return True
         except KeyError as key_err:
             self.logger.error(
-                "Error in the results parsing: \t\r\n" + str(key_err))
+                "Error in the results parsing: " + str(key_err))
             return False
 
     # This method is a big wrapper to take care of all port testing aspects
@@ -363,10 +366,10 @@ class WPDiag:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         ret = sock.connect_ex(("127.0.0.1", port))
         if ret == 0:
-            print("Port " + str(port) + " is open")  # Connected successfully
+            print(f"Port {port} is open")  # Connected successfully
         else:
             # Failed to connect because port is in use (or bad host)
-            print("Port " + str(port) + " is closedi: " + os.strerror(ret))
+            print(f"Port {port} is closed: " + os.strerror(ret))
         sock.close()
         return (ret == 0)
 
