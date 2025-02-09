@@ -531,7 +531,7 @@ class PProxy():
             new_config = self.device.get_device_config_backend()
             # if local version is larger than remote, ignore messages as outdated
             # pass each part of the config to the right service handler
-            print(new_config)
+            self.logger.debug(new_config)
             # service_name = self.sanitize_str(data["service_name"])
             # config = data["config"]
             # services.configure(service_name, config)

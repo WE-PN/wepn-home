@@ -14,6 +14,7 @@ import threading
 import time
 
 from constants import DEFAULT_GET_TIMEOUT as GET_TIMEOUT
+from constants import CONNECTIVITY_TEST_URLS as CONN_TEST_URLS
 
 try:
     from configparser import configparser
@@ -101,33 +102,24 @@ class WPDiag:
         self.device.close_port(port)
 
     def is_connected_to_internet(self):
-        urls = [
-            "https://status.we-pn.com",
-            "https://twitter.com",
-            "https://google.com",
-            "https://www.speedtest.net/",
-            "https://www.cnn.com/",
-            "https://bbc.co.uk",
-        ]
-
-        random.shuffle(urls)
-        for url in urls:
+        random.shuffle(CONN_TEST_URLS)
+        for url in CONN_TEST_URLS:
             try:
                 # connect to the host -- tells us if the host is actually
                 # reachable
                 requests.get(url, timeout=GET_TIMEOUT)
                 return True
             except:
-                self.logger.exception("Could not connect to the internet")
+                self.logger.debug("Could not connect to the internet")
         return False
 
     def is_connected_to_service(self):
         try:
             socket.create_connection(("www.we-pn.com", 443), 10)
             return True
-        except OSError:
-            return False
-            pass
+        except:
+            self.logger.debug("Could not connect to the WEPN API server")
+        return False
 
     # DEPRECATED
     # Getting to the extrenal port from the device itself is not reliable,
@@ -140,9 +132,7 @@ class WPDiag:
             s = socket.create_connection((external_ip, port), 10)
             s.sendall(b'test\n')
             return True
-        except OSError as err:
-            print(err)
-            pass
+        except OSError:
             return False
 
     def request_port_check(self, port):
@@ -165,6 +155,7 @@ class WPDiag:
         data_json = json.dumps(data)
         self.logger.debug("Port check data to send: " + data_json)
         url = self.config.get('django', 'url') + "/api/experiment/"
+        resp = None
         try:
             response = requests.post(url, data=data_json, headers=headers, timeout=GET_TIMEOUT)
             self.logger.debug(
@@ -180,6 +171,8 @@ class WPDiag:
             self.logger.error(
                 "Error in gettin the resonse: \r\n\t" + str(key_missing_err))
             self.logger.error("response: \r\n\t" + str(resp))
+        except Exception as err:
+            self.logger.error("Uncaught error in request_port_check" + str(err))
         return experiment_num
 
     def fetch_port_check_results(self, experiment_number):
@@ -200,7 +193,8 @@ class WPDiag:
         except requests.exceptions.RequestException as exception_error:
             self.logger.error(
                 "Error is parsing experiment results: " + str(exception_error))
-            pass
+        except Exception as err:
+            self.logger.error("Uncaught error in fetch_port_check_results" + str(err))
         return
 
     # Method to get the results of a pending experiment from the server
