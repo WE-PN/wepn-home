@@ -299,21 +299,30 @@ class LCD:
         image.save(IMG_OUT)
 
     def play_animation(self, filename=None, loop_count=1):
+        if filename is None:
+            return
         self.clear()
         prev_backlight = self.get_backlight_is_on()
         self.set_backlight(1)
         # to avoid filename based attacks, all gifs are in the ui/ directory
         filename = os.path.basename(filename)
+        frames = []
         with Image.open("ui/" + filename) as im:
-            loops = 1
-            while (loops < loop_count):
-                for frame in ImageSequence.Iterator(im):
-                    frame = frame.convert("RGBA")
-                    frame = frame.rotate(180)
-                    frame = frame.resize((240, 240))
+            for frame in ImageSequence.Iterator(im):
+                frame = frame.convert("RGBA")
+                frame = frame.rotate(180)
+                frame = frame.resize((240, 240))
+                frames.append(frame)
+        loops = 1
+        print(len(frames))
+        while (loops <= loop_count):
+            print(loops)
+            try:
+                for frame in frames:
                     self.lcd.image(frame)
-                    # time.sleep(0.1)
-                loops += 1
+            except Exception as e:
+                print(e)
+            loops += 1
         self.clear()
         self.set_backlight(prev_backlight)
 
