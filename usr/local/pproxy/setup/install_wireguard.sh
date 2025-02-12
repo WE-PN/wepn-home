@@ -18,8 +18,9 @@
 # apt-get install wireguard
 
 wg-quick down wg0
-PORT=`cat /etc/pproxy/config.ini  | grep wireport | awk '{print $3}'`
+ORPORT=`cat /etc/pproxy/config.ini  | grep wireport | tr -d ' ' | awk -F"=" '{print $2}'`
 PORT=${ORPORT:=6711}
+echo "setting up wireguard on port $ORPORT"
 
 configs_path=/var/local/pproxy/users/
 mkdir $configs_path
@@ -28,7 +29,21 @@ chown pproxy:pproxy $configs_path
 cd /etc/wireguard
 
 umask 077
-wg genkey | tee privatekey | wg pubkey > publickey
+if [ -e wg0.conf ];
+then
+	server_priv=`cat /etc/wireguard/wg0.conf | grep PrivateKey | awk -F" = " '{print $2}'`
+	echo $server_priv
+	if [ ! -z $server_priv ]; then
+		echo $server_priv > privatekey
+		echo $server_priv | wg pubkey > publickey
+	fi
+fi
+
+if [ ! -e privatekey ];
+then
+	wg genkey | tee privatekey | wg pubkey > publickey
+
+fi
 
 PUB_SERVER=`cat publickey`
 PRIV_SERVER=`cat privatekey`
@@ -59,7 +74,8 @@ wg-quick up wg0
 wg show
 systemctl enable wg-quick@wg0
 
-rm -f publickey
-rm -f privatekey
+chmod +x /etc/wireguard/
+chmod 0644 publickey
+chmod 0600 privatekey
 
 cd -

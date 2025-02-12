@@ -366,10 +366,10 @@ class WPDiag:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         ret = sock.connect_ex(("127.0.0.1", port))
         if ret == 0:
-            print(f"Port {port} is open")  # Connected successfully
+            self.logger.debug(f"Port {port} is open")  # Connected successfully
         else:
             # Failed to connect because port is in use (or bad host)
-            print(f"Port {port} is closed: " + os.strerror(ret))
+            self.logger.debug(f"Port {port} is closed: " + os.strerror(ret))
         sock.close()
         return (ret == 0)
 
@@ -387,7 +387,6 @@ class WPDiag:
 
     def find_next_good_port(self, in_port):
         rport, errno = in_port, 0
-        print(rport)
         self.logger.error("-----" + str(rport))
         retries = 0
         undecided = True
