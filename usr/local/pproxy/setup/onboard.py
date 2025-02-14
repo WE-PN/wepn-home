@@ -202,6 +202,7 @@ class OnBoard():
     def on_connect(self, client, userdata, flags, result_code):
         self.logger.debug("Connected with result code " + str(result_code))
         if (result_code == 0):
+            self.lcd.play_animation("done_checkmark.gif")
             self.logger.critical("* setting device to claimed")
             self.leds.set_all((0, 255, 0))
             # save the randomly generated devkey
