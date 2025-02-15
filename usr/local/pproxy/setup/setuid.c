@@ -6,7 +6,7 @@
 //#define DEBUG
 #define SRV_CNT 6
 #define CMD_CNT 6
-#define SPECIAL_CMD_CNT 20
+#define SPECIAL_CMD_CNT 23
 
 char* _sanitize(char input[], short type) {
 	static char ok_chars[] = "abcdefghijklmnopqrstuvwxyz"
@@ -88,6 +88,8 @@ int main(int argc, char * argv[])
 	scommands[19]= "rm /etc/apt/sources.list.d/wepn-beta.list";
 	// hard coding sda2 for rootfs
 	scommands[20]= "mount /dev/sda2 /mnt/";
+	scommands[21]= "/usr/bin/wg-quick down wg0";
+	scommands[22]= "/usr/bin/wg-quick up wg0";
 
 	int c,s,t;
 

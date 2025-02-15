@@ -14,6 +14,7 @@ import threading
 import time
 
 from constants import DEFAULT_GET_TIMEOUT as GET_TIMEOUT
+from constants import CONNECTIVITY_TEST_URLS as CONN_TEST_URLS
 
 try:
     from configparser import configparser
@@ -80,12 +81,15 @@ class WPDiag:
         while not self.shutdown_listener:
             if int(time.time()) - start > 120:
                 self.shutdown_listener = True
-            self.logger.info('waiting ... ')
-            conn, addr = s.accept()
-            self.logger.info('Connected by ' + str(addr[0]))
-            data = conn.recv(8)
-            conn.sendall(data)
-            conn.close()
+            self.logger.info(f'waiting on port {port}... ')
+            try:
+                conn, addr = s.accept()
+                self.logger.info(f"Connected by {addr[0]} to port {port}")
+                data = conn.recv(8)
+                conn.sendall(data)
+                conn.close()
+            except TimeoutError:
+                self.logger.debug(f"listener timed out for port {port}")
 
     def open_test_port(self, port):
         self.shutdown_listener = False
@@ -101,33 +105,24 @@ class WPDiag:
         self.device.close_port(port)
 
     def is_connected_to_internet(self):
-        urls = [
-            "https://status.we-pn.com",
-            "https://twitter.com",
-            "https://google.com",
-            "https://www.speedtest.net/",
-            "https://www.cnn.com/",
-            "https://bbc.co.uk",
-        ]
-
-        random.shuffle(urls)
-        for url in urls:
+        random.shuffle(CONN_TEST_URLS)
+        for url in CONN_TEST_URLS:
             try:
                 # connect to the host -- tells us if the host is actually
                 # reachable
                 requests.get(url, timeout=GET_TIMEOUT)
                 return True
             except:
-                self.logger.exception("Could not connect to the internet")
+                self.logger.debug("Could not connect to the internet")
         return False
 
     def is_connected_to_service(self):
         try:
             socket.create_connection(("www.we-pn.com", 443), 10)
             return True
-        except OSError:
-            return False
-            pass
+        except:
+            self.logger.debug("Could not connect to the WEPN API server")
+        return False
 
     # DEPRECATED
     # Getting to the extrenal port from the device itself is not reliable,
@@ -140,9 +135,7 @@ class WPDiag:
             s = socket.create_connection((external_ip, port), 10)
             s.sendall(b'test\n')
             return True
-        except OSError as err:
-            print(err)
-            pass
+        except OSError:
             return False
 
     def request_port_check(self, port):
@@ -165,21 +158,24 @@ class WPDiag:
         data_json = json.dumps(data)
         self.logger.debug("Port check data to send: " + data_json)
         url = self.config.get('django', 'url') + "/api/experiment/"
+        resp = None
         try:
             response = requests.post(url, data=data_json, headers=headers, timeout=GET_TIMEOUT)
             self.logger.debug(
-                "Response to port check request" + str(response.status_code))
+                "Response to port check request " + str(response.status_code))
             resp = response.json()
-            self.logger.error("response: \r\n\t" + str(resp))
+            self.logger.error("response: " + str(resp))
             experiment_num = resp['id']
         except requests.exceptions.RequestException as exception_error:
             self.logger.error(
                 "Error in sending portcheck request: \r\n\t" + str(exception_error))
-            self.logger.error("response: \r\n\t" + str(resp))
+            self.logger.error("response: " + str(resp))
         except KeyError as key_missing_err:
             self.logger.error(
                 "Error in gettin the resonse: \r\n\t" + str(key_missing_err))
-            self.logger.error("response: \r\n\t" + str(resp))
+            self.logger.error("response: " + str(resp))
+        except Exception as err:
+            self.logger.error("Uncaught error in request_port_check" + str(err))
         return experiment_num
 
     def fetch_port_check_results(self, experiment_number):
@@ -200,7 +196,8 @@ class WPDiag:
         except requests.exceptions.RequestException as exception_error:
             self.logger.error(
                 "Error is parsing experiment results: " + str(exception_error))
-            pass
+        except Exception as err:
+            self.logger.error("Uncaught error in fetch_port_check_results" + str(err))
         return
 
     # Method to get the results of a pending experiment from the server
@@ -231,7 +228,7 @@ class WPDiag:
                 return True
         except KeyError as key_err:
             self.logger.error(
-                "Error in the results parsing: \t\r\n" + str(key_err))
+                "Error in the results parsing: " + str(key_err))
             return False
 
     # This method is a big wrapper to take care of all port testing aspects
@@ -369,10 +366,10 @@ class WPDiag:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         ret = sock.connect_ex(("127.0.0.1", port))
         if ret == 0:
-            print("Port " + str(port) + " is open")  # Connected successfully
+            self.logger.debug(f"Port {port} is open")  # Connected successfully
         else:
             # Failed to connect because port is in use (or bad host)
-            print("Port " + str(port) + " is closedi: " + os.strerror(ret))
+            self.logger.debug(f"Port {port} is closed: " + os.strerror(ret))
         sock.close()
         return (ret == 0)
 
@@ -390,7 +387,6 @@ class WPDiag:
 
     def find_next_good_port(self, in_port):
         rport, errno = in_port, 0
-        print(rport)
         self.logger.error("-----" + str(rport))
         retries = 0
         undecided = True

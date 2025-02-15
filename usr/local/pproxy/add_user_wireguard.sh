@@ -22,7 +22,9 @@ CLEAN=${CLEAN//[^a-zA-Z0-9_\.]/}
 clean_name=`echo -n $CLEAN | tr A-Z a-z`
 main_users_dir=/var/local/pproxy/users
 userdir=$main_users_dir/$clean_name
+server_pub=`cat /var/local/pproxy/wireguard-publickey`
 mkdir -p $userdir
+umask 077
 
 if ! test -f $userdir/privatekey; then
 	# new user
@@ -63,21 +65,19 @@ psk=`cat $userdir/psk`
 cat > $userdir/wg.conf << EOF
 [Interface]
 PrivateKey = $priv
-Address = $inv_ip/32
-DNS = $inv_ip_server,8.8.8.8
+Address = $inv_ip/24
+DNS = 1.1.1.1
 
 [Peer]
-PublicKey = $pub
+PublicKey = $server_pub
 PresharedKey = $psk
 Endpoint = $ip:$clean_port
 AllowedIPs = 0.0.0.0/0
 EOF
 
-#sudo wg set wg0 peer $pub preshared-key /var/local/pproxy/users/$clean_name/psk allowed-ips $inv_ip/32
+# sudo wg set wg0 peer $pub preshared-key /var/local/pproxy/users/$clean_name/psk allowed-ips $inv_ip/32
 wepn-run 1 6 0 $pub $clean_name $inv_ip
 
-#sudo wg-quick save wg0
-#wg-quick save wg0
+# sudo wg-quick save wg0
 wepn-run 1 7 0
 
-wepn-run 0 2 2 0
