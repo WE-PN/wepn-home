@@ -60,27 +60,25 @@ class Wireguard(Service):
         return
 
     def start(self):
-        cmd = "0 2 1"
+        cmd = "1 22"
         self.logger.debug(cmd)
         self.execute_setuid(cmd)
         return
 
     def stop(self):
-        cmd = "0 2 0"
+        cmd = "1 21"
         self.logger.debug(cmd)
         self.execute_setuid(cmd)
         return
 
     def restart(self):
-        cmd = "0 2 2"
-        self.logger.debug(cmd)
-        self.execute_setuid(cmd)
+        self.stop()
+        self.start()
         return
 
     def reload(self):
-        cmd = "0 2 3"
-        self.logger.debug(cmd)
-        self.execute_setuid(cmd)
+        self.stop()
+        self.start()
         return
 
     def get_users_list(self):
