@@ -9,7 +9,7 @@ import lcd # noqa
 LCD = lcd.LCD()
 LCD.set_lcd_present(1)
 LCD.set_backlight(True)
-LCD.play_animation("three_dot_loader.gif")
+LCD.play_animation("done_checkmark.gif")
 LCD.play_animation("three_dot_loader_1.gif")
 LCD.play_animation("three_dot_loader_2.gif")
 LCD.play_animation("three_dot_loader_3.gif")

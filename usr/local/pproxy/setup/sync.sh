@@ -7,7 +7,7 @@ WEPN_DIR=/usr/local/pproxy
 
 if [ ! -d "$GIT_DIR" ];
 then
-	mkdir $GIT_DIR 
+	mkdir -p $GIT_DIR
 	cd $GIT_DIR
 	git clone https://bitbucket.org/dvpn4hr/home_device.git
 	echo "switching to the dev branch"

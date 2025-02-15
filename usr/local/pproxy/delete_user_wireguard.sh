@@ -22,5 +22,4 @@ else
 	rmdir $userdir/
 	echo wg-quick save wg0
 	wepn-run 1 7 0
-	wepn-run 0 2 2 0
 fi

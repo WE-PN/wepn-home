@@ -23,6 +23,14 @@ PORT=${ORPORT:=6711}
 PUBPUB=/var/local/pproxy/wireguard-publickey
 echo "setting up wireguard on port $ORPORT"
 
+# ip_forward should be already on, just in case:
+if ! grep -q "^net.ipv4.ip_forward$" /etc/sysctl.conf;
+then
+	echo "adding ip_forward to sysctl to persist"
+	sed -i 's|#net.ipv4.ip_forward=1|net.ipv4.ip_forward=1|' /etc/sysctl.conf
+	/usr/sbin/sysctl -p
+fi
+
 configs_path=/var/local/pproxy/users/
 mkdir -p $configs_path
 chown pproxy:pproxy $configs_path
@@ -52,8 +60,10 @@ PRIV_SERVER=`cat privatekey`
 cat > /etc/wireguard/wg0.conf << EOF
 
 [Interface]
+SaveConfig = true
 PrivateKey = $PRIV_SERVER
 Address = 10.93.76.1/24
+DNS = 1.1.1.1
 ListenPort = $PORT
 PostUp = iptables -I INPUT -p udp --dport $PORT -j ACCEPT
 PostUp = iptables -I FORWARD -i eth0 -o wg0 -j ACCEPT
