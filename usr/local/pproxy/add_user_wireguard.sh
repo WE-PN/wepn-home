@@ -22,7 +22,7 @@ CLEAN=${CLEAN//[^a-zA-Z0-9_\.]/}
 clean_name=`echo -n $CLEAN | tr A-Z a-z`
 main_users_dir=/var/local/pproxy/users
 userdir=$main_users_dir/$clean_name
-server_pub=`cat /etc/wireguard/publickey`
+server_pub=`cat /var/local/pproxy/wireguard-publickey`
 mkdir -p $userdir
 umask 077
 

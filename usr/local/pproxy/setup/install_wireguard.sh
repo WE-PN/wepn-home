@@ -20,10 +20,11 @@
 wg-quick down wg0
 ORPORT=`cat /etc/pproxy/config.ini  | grep wireport | tr -d ' ' | awk -F"=" '{print $2}'`
 PORT=${ORPORT:=6711}
+PUBPUB=/var/local/pproxy/wireguard-publickey
 echo "setting up wireguard on port $ORPORT"
 
 configs_path=/var/local/pproxy/users/
-mkdir $configs_path
+mkdir -p $configs_path
 chown pproxy:pproxy $configs_path
 
 cd /etc/wireguard
@@ -74,8 +75,9 @@ wg-quick up wg0
 wg show
 systemctl enable wg-quick@wg0
 
-chmod +x /etc/wireguard/
-chmod 0644 publickey
+cp publickey $PUBPUB
+chmod 0644 $PUBPUB
+# just to be safe, umask should have already set it right
 chmod 0600 privatekey
 
 cd -
