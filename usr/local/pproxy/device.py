@@ -32,6 +32,7 @@ from constants import DATETIME_FORMAT
 from constants import DEFAULT_UPNP_TIMEOUT
 from constants import DEFAULT_GET_TIMEOUT as GET_TIMEOUT
 from constants import SKIP_OTA_CHECK
+from constants import ERROR_LOG_FILE
 
 
 COL_PINS = [26]  # BCM numbering
@@ -931,3 +932,15 @@ class Device():
         data_json = json.dumps(data)
         response = requests.get(url, data=data_json, headers=headers, timeout=GET_TIMEOUT)
         return response.json()
+
+    def get_error_logs(self):
+        contents = ""
+        try:
+            with open(ERROR_LOG_FILE, 'r') as error_log:
+                contents = error_log.read()
+            with open(ERROR_LOG_FILE + ".1", 'r') as error_log:
+                contents += error_log.read()
+        except FileNotFoundError as err:
+            print("Not enough logs, returning what was there" + str(err))
+            pass
+        return contents

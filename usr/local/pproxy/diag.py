@@ -246,7 +246,7 @@ class WPDiag:
             long_term_expired = (last_check_date.replace(tzinfo=None) <
                                  (datetime.datetime.now().replace(tzinfo=None) + timedelta(hours=-6)))
             short_term_expired = (last_check_date.replace(tzinfo=None) <
-                                  (datetime.datetime.now().replace(tzinfo=None) + timedelta(hours=-2)))
+                                  (datetime.datetime.now().replace(tzinfo=None) + timedelta(minutes=-20)))
 
             if force_check:
                 long_term_expired = True
@@ -265,6 +265,7 @@ class WPDiag:
                 self.get_results_from_server(port)
             elif long_term_expired or (previous_failed and short_term_expired):
                 # results are too old, request a new one
+                # if the last test failed, then only wait the short_term amount
                 self.logger.info(
                     "port test results too old recently failed, retesting")
                 # please note that the port opened here will be closed by either

@@ -17,7 +17,6 @@ try:
     from configparser import configparser
 except ImportError:
     import configparser
-ERROR_LOG_FILE = "/var/local/pproxy/error.log"
 CONFIG_FILE = '/etc/pproxy/config.ini'
 config = configparser.ConfigParser()
 config.read(CONFIG_FILE)
@@ -201,15 +200,8 @@ def get_error_log():
     if int(is_claimed) == 1:
         if not valid_token(request.args.get('local_token')):
             return "Not accessible", http_status.HTTP_401_UNAUTHORIZED
-    contents = ""
-    try:
-        with open(ERROR_LOG_FILE, 'r') as error_log:
-            contents = error_log.read()
-        with open(ERROR_LOG_FILE + ".1", 'r') as error_log:
-            contents += error_log.read()
-    except FileNotFoundError as err:
-        print("Not enough logs, returning what was there" + str(err))
-        pass
+    device = Device()
+    contents = device.get_error_logs()
     return (contents)
 
 

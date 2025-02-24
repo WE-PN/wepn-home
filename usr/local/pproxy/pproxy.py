@@ -5,6 +5,7 @@ from email.utils import formatdate
 from os.path import basename
 from threading import Lock, Thread
 import atexit
+import base64
 import json
 import logging.config
 import os
@@ -15,6 +16,7 @@ import shlex
 import smtplib
 import ssl
 import time
+import zlib
 
 try:
     from configparser import configparser
@@ -348,6 +350,9 @@ class PProxy():
         self.logger.debug("after starting the thread for on_message")
 
     def on_message_handler(self, data, lock):
+        # TODO: need to add a new class Message, and then add this handler there.
+        # challenge is that there are too many glabal variables here, need some clean up
+        # ideally also have a separate thread that has a queue and handles messages in order.
         services = Services(self.loggers['services'])
         unsubscribe_link = None
         send_email = True
@@ -373,6 +378,14 @@ class PProxy():
                                                       self.get_tunnel_from_data(data))
             if short_link != "" and self.messages.e2ee_available():
                 self.messages.send_msg(short_link, cert_id=cname, secure=True, msg_type="response-access-link")
+        elif (data['action'] == 'get_error_log'):
+            cname = self.sanitize_str(data['cert_name'])
+            err_log = self.device.get_error_logs()
+            contents_bytes = err_log.encode('utf-8')
+            compressed = zlib.compress(contents_bytes)
+            c_base = base64.b64encode(compressed).decode('utf-8')
+            self.messages.send_msg(c_base, cert_id=cname, secure=True, msg_type="response-error-logs")
+
         elif (data['action'] == 'add_user'):
             txt = None
             try:

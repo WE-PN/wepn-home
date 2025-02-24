@@ -1,10 +1,3 @@
-DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S.%f"
-DEFAULT_GET_TIMEOUT = 10
-DEFAULT_UPNP_TIMEOUT = 86400
-FORCE_SCREEN_ON = False
-HEALTHY_DIAG_CODE = 127
-LOG_CONFIG = "/etc/pproxy/logging.ini"
-SKIP_OTA_CHECK = False
 CONNECTIVITY_TEST_URLS = [
     "https://status.we-pn.com",
     "https://twitter.com",
@@ -14,3 +7,11 @@ CONNECTIVITY_TEST_URLS = [
     "https://bbc.co.uk",
     "https://connectivity.wepn.dev",
 ]
+DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S.%f"
+DEFAULT_GET_TIMEOUT = 10
+DEFAULT_UPNP_TIMEOUT = 86400
+ERROR_LOG_FILE = "/var/local/pproxy/error.log"
+FORCE_SCREEN_ON = False
+HEALTHY_DIAG_CODE = 127
+LOG_CONFIG = "/etc/pproxy/logging.ini"
+SKIP_OTA_CHECK = False
