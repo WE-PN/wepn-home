@@ -378,14 +378,26 @@ class PProxy():
                                                       self.get_tunnel_from_data(data))
             if short_link != "" and self.messages.e2ee_available():
                 self.messages.send_msg(short_link, cert_id=cname, secure=True, msg_type="response-access-link")
-        elif (data['action'] == 'get_error_log'):
+        elif (data['action'] == 'get-error-log'):
             cname = self.sanitize_str(data['cert_name'])
             err_log = self.device.get_error_logs()
             contents_bytes = err_log.encode('utf-8')
             compressed = zlib.compress(contents_bytes)
             c_base = base64.b64encode(compressed).decode('utf-8')
             self.messages.send_msg(c_base, cert_id=cname, secure=True, msg_type="response-error-logs")
-
+        elif (data['action'] == 'show-e2ee-qrcode'):
+            # This is useful for cases where the pod and the phone are somehow not able
+            # to sync using local API, for example and isolated network.
+            # This key should not be available from the device menu, to avoid a guest copying it.
+            # TODO: this is currently just overwriting the screen
+            # when LCD is handled by a separate service, we can give it a timeout.
+            self.status.reload()
+            if self.status.has_option('status', 'e2e_key'):
+                e2ee_key = self.status.get('e2e_key')
+            else:
+                e2ee_key = "not-set"
+            display_str = [(2, "wepn://e2ee_key=" + str(e2ee_key), 2, "white"), ]
+            self.lcd.display(display_str, 19)
         elif (data['action'] == 'add_user'):
             txt = None
             try:
