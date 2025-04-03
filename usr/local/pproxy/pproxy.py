@@ -374,7 +374,7 @@ class PProxy():
         if (data['action'] == 'get-access-link'):
             cname = self.sanitize_str(data['cert_name'])
             short_link = services.get_short_link_text(cname,
-                                                      self.get_server_public_address,
+                                                      self.get_server_public_address(),
                                                       self.get_tunnel_from_data(data))
             if short_link != "" and self.messages.e2ee_available():
                 self.messages.send_msg(short_link, cert_id=cname, secure=True, msg_type="response-access-link")
