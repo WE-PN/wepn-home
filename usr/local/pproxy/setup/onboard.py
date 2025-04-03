@@ -231,15 +231,18 @@ class OnBoard():
         self.logger.debug(">>>on_message: " + msg.topic + " " + str(msg.payload))
 
     def display_claim_info(self):
-        if int(self.config.get("hw", "lcd-version")) > 1:
-            serial_number = self.config.get('django', 'serial_number')
-            # if no app is installed, QR code will redirect to iOS/Android App store automaticall
-            # if app is installed, the camera in app can extract serial and keys and ignore the URL
-            display_str = [(1, "https://red.we-pn.com/?pk=" + str(self.rand_e2e_key) + "&s=" +
-                            str(serial_number) + "&k=" + str(self.rand_key), 2, "white")]
+        if not self.device.is_config_populated():
+            display_str = [(1, "config invalid", 0, "red")]
         else:
-            display_str = [(1, "Device Key:", 0, "blue"),
-                           (2, '', 0, "white"), (3, str(self.rand_key), 0, "white"), ]
+            if int(self.config.get("hw", "lcd-version")) > 1:
+                serial_number = self.config.get('django', 'serial_number')
+                # if no app is installed, QR code will redirect to iOS/Android App store automaticall
+                # if app is installed, the camera in app can extract serial and keys and ignore the URL
+                display_str = [(1, "https://red.we-pn.com/?pk=" + str(self.rand_e2e_key) + "&s=" +
+                                str(serial_number) + "&k=" + str(self.rand_key), 2, "white")]
+            else:
+                display_str = [(1, "Device Key:", 0, "blue"),
+                               (2, '', 0, "white"), (3, str(self.rand_key), 0, "white"), ]
         self.lcd.display(display_str, 18)
 
     def start(self, run_once=False):

@@ -716,6 +716,20 @@ class Device():
         except (KeyError, TypeError, FileNotFoundError, json.JSONDecodeError):
             return None
 
+    def is_config_populated(self, config_path=CONFIG_FILE):
+        try:
+            cfg = configparser.ConfigParser()
+            cfg.read(config_path)
+            needed = [cfg.get('django', 'serial_number'),
+                      cfg.get('django', 'id'),
+                      cfg.get('mqtt', 'username')]
+            for var in needed:
+                if var.lower().startswith("change"):
+                    return False
+        except:
+            return False
+        return True
+
     def config_matches_serial(self, config_path, serial_number):
         if serial_number is None:
             return True

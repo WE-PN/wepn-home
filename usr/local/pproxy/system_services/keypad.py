@@ -368,13 +368,17 @@ class KEYPAD:
         return True  # exit the menu
 
     def show_claim_info_qrcode(self):
-        current_key = self.status.get('status', 'temporary_key')
-        current_e2e_key = self.status.get('status', 'temp_e2e_key')
-        serial_number = self.config.get('django', 'serial_number')
-        display_str = [(1, "https://red.we-pn.com/?pk=" + str(current_e2e_key) + "&s=" +
-                        str(serial_number) + "&k=" + str(current_key), 2, "white"), ]
-        if self.screen_timed_out is False:
-            self.lcd.display(display_str, 20)
+        if not self.device.is_config_populated():
+            if self.screen_timed_out is False:
+                self.lcd.long_text("config not populated, contact support")
+        else:
+            current_key = self.status.get('status', 'temporary_key')
+            current_e2e_key = self.status.get('status', 'temp_e2e_key')
+            serial_number = self.config.get('django', 'serial_number')
+            display_str = [(1, "https://red.we-pn.com/?pk=" + str(current_e2e_key) + "&s=" +
+                            str(serial_number) + "&k=" + str(current_key), 2, "white"), ]
+            if self.screen_timed_out is False:
+                self.lcd.display(display_str, 20)
         return True  # exit the menu
 
     def restart(self):
