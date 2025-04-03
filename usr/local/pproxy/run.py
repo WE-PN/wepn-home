@@ -32,8 +32,23 @@ logger.critical("Starting WEPN")
 
 # check if INI configs are corrupted
 # restore and upgrade as needed
-def check_and_restore(conf, backup):
-    if not os.path.exists(conf) or os.stat(conf).st_size == 0:
+# backups are saved in setup/onboard.py
+def check_and_restore(conf, backup, test):
+    parsed = False
+    try:
+        cfg = configparser.ConfigParser()
+        cfg.read(conf)
+        logger.error(cfg[test[0]][test[1]])
+        parsed = True
+    except:
+        logger.error("could not parse the config")
+        parsed = False
+
+    needs_restore = (not os.path.exists(conf)
+                     or os.stat(conf).st_size == 0
+                     or not parsed)
+    if needs_restore:
+        logger.critical("recovering a config " + conf)
         if os.path.exists(backup):
             copyfile(backup, conf)
         # backup might have been created before
@@ -41,8 +56,8 @@ def check_and_restore(conf, backup):
         exec(open(UPDATE_SCRIPT).read())  # nosec: fixed path python file
 
 
-check_and_restore(CONFIG_FILE, CONFIG_FILE_BACKUP)
-check_and_restore(STATUS_FILE, STATUS_FILE_BACKUP)
+check_and_restore(CONFIG_FILE, CONFIG_FILE_BACKUP, ["mqtt", "username"])
+check_and_restore(STATUS_FILE, STATUS_FILE_BACKUP, ["status", "claimed"])
 
 lcd = LCD()
 leds = LEDClient()
