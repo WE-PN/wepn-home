@@ -28,6 +28,7 @@ except ImportError:
     import configparser
 from wstatus import WStatus as WStatus
 
+from constants import CONFIG_SERVER_URL
 from constants import DATETIME_FORMAT
 from constants import DEFAULT_UPNP_TIMEOUT
 from constants import DEFAULT_GET_TIMEOUT as GET_TIMEOUT
@@ -769,6 +770,27 @@ class Device():
         self.execute_cmd_output(cmd_sudo, True)  # nosec static input (go.we-pn.com/waiver-1)
         time.sleep(5)
 
+    def fetch_config_from_backend(self):
+        update_done = False
+        # we don't want the operation to always happen
+        if not self.is_config_populated():
+            new_config_str = None
+            # config is either missing or somehow corrupt
+            # fetch config from server, ip needs to be allowlisted by support first
+            try:
+                r = requests.get(CONFIG_SERVER_URL, timeout=GET_TIMEOUT)  # nosec
+                if (r.status_code == 200):
+                    new_config_str = r.content.decode("utf-8")
+                # write the config to the path
+                if new_config_str is not None:
+                    config_file = open("/etc/pproxy/config.ini", 'w')
+                    config_file.write(new_config_str)
+                    config_file.close()
+                    update_done = True
+            except:
+                self.logger.exception("error trying to recover config file")
+        return update_done
+
     def generate_new_config(self):
         try:
 
@@ -779,6 +801,7 @@ class Device():
             board_serial = self.get_serial_from_eeprom()
 
             found = False
+            written = False
 
             # search partitions sda1 and sda2 for options
             for partition_num in [1, 2]:
@@ -818,12 +841,14 @@ class Device():
                 config_file = open("/etc/pproxy/config.ini", 'w')
                 config_file.write(new_config_str)
                 config_file.close()
+                written = True
             else:
                 self.logger.error("cound not find or generate new configuration")
         except Exception:
             self.logger.exception("Error generating new config file")
         finally:
             self.umount_all_drives()
+        return written
 
     def generate_ssh_host_keys(self):
         cmd_sudo = SRUN + " 1 13"

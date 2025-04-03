@@ -1,3 +1,4 @@
+CONFIG_SERVER_URL = "https://config.we-pn.com"
 CONNECTIVITY_TEST_URLS = [
     "https://status.we-pn.com",
     "https://twitter.com",
