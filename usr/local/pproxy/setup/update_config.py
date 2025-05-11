@@ -175,6 +175,7 @@ if not config.has_section('tor'):
 config.set('tor', 'db-path', "/var/local/pproxy/tor.db")
 # forcing this to always be 9040, correcting previous error
 config.set('tor', 'orport', "8991")
+config.set('tor', 'transport', "9040")
 
 if not status.has_option('status', 'e2e_key'):
     import secrets
@@ -196,6 +197,7 @@ if config.has_section('software'):
 if not status.has_section('software'):
     status.add_section('software')
     status.set('software', 'channel', "prod")
+status.set('software', 'uplink', "tor")
 
 # WARP installation and config
 if not config.has_section('warp'):
