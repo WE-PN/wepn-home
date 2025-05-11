@@ -197,6 +197,13 @@ if not status.has_section('software'):
     status.add_section('software')
     status.set('software', 'channel', "prod")
 
+# WARP installation and config
+if not config.has_section('warp'):
+    config.add_section('warp')
+    config.set('warp', 'enabled', "0")
+    config.set('warp', 'redproxy-port', "8999")
+    config.set('warp', 'proxy-port', "8971")
+
 # GCM is required, but older shadowsocks doesn't support it
 config.set('shadow', 'method', 'aes-256-gcm')
 status.set('status', 'sw', '1.19.9')
