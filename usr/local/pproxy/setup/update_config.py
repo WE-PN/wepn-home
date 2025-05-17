@@ -192,23 +192,40 @@ if not config.has_section('wireguard'):
     config.set('wireguard', 'email', "1")
     config.set('wireguard', 'wireport', "6711")
 
+# moving the software section
 if config.has_section('software'):
     config.remove_section('software')
+
 if not status.has_section('software'):
     status.add_section('software')
     status.set('software', 'channel', "prod")
-status.set('software', 'uplink', "tor")
+else:
+    if status.has_option('software', 'uplink'):
+        status.remove_option('software', 'uplink')
+    if status.has_option('software', 'routing-mode'):
+        status.remove_option('software', 'routing-mode')
+
+# core networking info:
+#   how to route, where to route, etc.
+if not status.has_section('networking'):
+    status.add_section('networking')
+    status.set('networking', 'uplink', "tor")
+    # all-traffic, geo
+    status.set('networking', 'routing-mode', "geo")
 
 # WARP installation and config
 if not config.has_section('warp'):
     config.add_section('warp')
     config.set('warp', 'enabled', "0")
     config.set('warp', 'redproxy-port', "8999")
-    config.set('warp', 'proxy-port', "8971")
+else:
+    if status.has_option('warp', 'proxy-port'):
+        status.remove_option('warp', 'proxy-port')
+    config.set('warp', 'warp-port', "8971")
 
 # GCM is required, but older shadowsocks doesn't support it
 config.set('shadow', 'method', 'aes-256-gcm')
-status.set('status', 'sw', '1.19.9')
+status.set('status', 'sw', '1.19.10')
 
 with open(CONFIG_FILE, 'w') as configfile:
     config.write(configfile)
