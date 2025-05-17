@@ -6,7 +6,7 @@
 //#define DEBUG
 #define SRV_CNT 6
 #define CMD_CNT 6
-#define SPECIAL_CMD_CNT 23
+#define SPECIAL_CMD_CNT 24
 
 char* _sanitize(char input[], short type) {
 	static char ok_chars[] = "abcdefghijklmnopqrstuvwxyz"
@@ -90,6 +90,7 @@ int main(int argc, char * argv[])
 	scommands[20]= "mount /dev/sda2 /mnt/";
 	scommands[21]= "/usr/bin/wg-quick down wg0";
 	scommands[22]= "/usr/bin/wg-quick up wg0";
+	scommands[23]= "/usr/local/sbin/limit_bandwidth.sh %s %s %s %s";
 
 	int c,s,t;
 
@@ -195,6 +196,24 @@ int main(int argc, char * argv[])
 			// psk
 			sanitize(argv[5]);
 			// allowed ip
+			sanitize(argv[6]);
+
+			sprintf(cmd, scommands[s], argv[3], argv[4], argv[5], argv[6], argv[7]);
+		}
+		else if (s == 23) {
+			// spcial commands that takes in arguments
+			if (argc != 7) {
+				printf("Missing params: provide <set|remove> <username> <interface> [rate]\n");
+				return(-1);
+			}
+
+			// set/remove:
+			sanitize(argv[3]);
+			// username:
+			sanitize_b64(argv[4]);
+			// interface
+			sanitize(argv[5]);
+			// rate
 			sanitize(argv[6]);
 
 			sprintf(cmd, scommands[s], argv[3], argv[4], argv[5], argv[6], argv[7]);
