@@ -25,6 +25,8 @@
 */20 * * * * /var/local/pproxy/wepn-env/bin/python3 /usr/local/pproxy/periodic/recovery.py >/dev/null 2>&1
 # update every 12 hours at 08
 8 */12 * * * /usr/local/sbin/wepn-run 1 3 >/dev/null 2>&1
+# refresh iptables rules every 12 hours
+18 */12 * * * /bin/bash /usr/local/pproxy/periodic/iptables-actions.sh >/dev/null 2>&1
 # check wireguard impact on connectivity
 10 1 * * * /bin/bash /usr/local/pproxy/periodic/check_wireguard.sh
 # weekly update
