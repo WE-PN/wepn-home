@@ -1,9 +1,16 @@
+import calendar
+import datetime
+import json
 import re
 from sanitize_filename import sanitize
 
+from networking import Networking
+from ooni import OONI
 from openvpn import OpenVPN
 from shadow import Shadow
+from ssh import SSH
 from tor import Tor
+from wifi import WiFi
 from wireguard import Wireguard
 
 try:
@@ -19,10 +26,14 @@ class Services:
         self.config = configparser.ConfigParser()
         self.config.read(CONFIG_FILE)
         self.services = []
+        self.services.append({'name': 'networking', 'obj': Networking(logger)})
+        self.services.append({'name': 'ooni', 'obj': OONI(logger)})
         self.services.append({'name': 'openvpn', 'obj': OpenVPN(logger)})
         self.services.append({'name': 'shadowsocks', 'obj': Shadow(logger)})
-        self.services.append({'name': 'wireguard', 'obj': Wireguard(logger)})
+        self.services.append({'name': 'ssh', 'obj': SSH(logger)})
         self.services.append({'name': 'tor', 'obj': Tor(logger)})
+        self.services.append({'name': 'wifi', 'obj': WiFi(logger)})
+        self.services.append({'name': 'wireguard', 'obj': Wireguard(logger)})
         self.logger = logger
         return
 
@@ -164,7 +175,25 @@ class Services:
             result &= service['obj'].self_test()
         return result
 
-    def configure(self, service_name, config_data):
+    def configure(self, config_data):
+        if isinstance(config_data, dict):
+            config_json = config_data
+        else:
+            config_json = json.loads(config_data)
+
+        for service_config in config_json["services"]:
+            service_name = service_config["name"].lower()
+            for service in self.services:
+                if service['name'] == service_name:
+                    service['obj'].configure(service_config["settings"])
+
+    def get_config_string(self):
+        date = datetime.datetime.utcnow()
+        utc_time = calendar.timegm(date.utctimetuple())
+        result = {
+            "config_version": utc_time,
+            "services": [],
+        }
         for service in self.services:
-            if service['name'] == service_name:
-                service['obj'].configure(config_data)
+            result["services"].append(service["obj"].get_config_settings())
+        return result

@@ -237,12 +237,8 @@ class Wireguard(Service):
         }
         return settings_json
 
-    def apply_config_settings(self, str_conf):
-        self.service_config.set_service_config(self.name, str_conf)
-        if not isinstance(str_conf, str):
-            str_conf = str(str_conf)
-        json_conf = json.loads(str_conf)
-        self.change_port(json_conf["port"], save=False)
+    def configure(self, json_conf):
+        self.service_config.set_service_config(self.name, json.dumps(json_conf))
         # not adding change_mode at this point, as it needs some validation
         self.set_enabled(json_conf["enabled"])
         return

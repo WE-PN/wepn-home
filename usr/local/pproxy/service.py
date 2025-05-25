@@ -115,11 +115,6 @@ class Service:
     def self_test(self):
         return True
 
-    def configure(self, config_data):
-        self.logger.error("configuring with : " + str(config_data))
-        if "enabled" in config_data:
-            self.set_enabled(config_data["enabled"])
-
     def backup_restore(self):
         return True
 
@@ -127,12 +122,12 @@ class Service:
         settings_json = {
             "name": self.name,
             "settings": {
-                "enabled": False,
+                "enabled": self.is_enabled(),
             },
         }
         return settings_json
 
-    def apply_config_settings(self, str_conf):
+    def configure(self, str_conf):
         json_conf = json.loads(str_conf)
         self.set_enabled(json_conf["settings"]["enabled"])
         return

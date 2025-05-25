@@ -72,16 +72,6 @@ class Tor(Service):
     def get_port(self):
         return self.get_overlayable_config_value("orport")
 
-    def change_port(self, new_port, save=True):
-        if new_port == "null" or new_port is None or new_port == 0:
-            return
-        port = int(self.get_port())
-        if port != int(new_port):
-            self.service_config.set_service_config(self.name, str(new_port), save)
-            self.forward_all()
-            self.config.save()
-            self.restart()
-
     def start(self):
         device = Device(self.logger)
         self.start_all()
@@ -233,12 +223,8 @@ class Tor(Service):
         }
         return settings_json
 
-    def apply_config_settings(self, str_conf):
-        self.service_config.set_service_config(self.name, str_conf)
-        if not isinstance(str_conf, str):
-            str_conf = str(str_conf)
-        json_conf = json.loads(str_conf)
-        self.change_port(json_conf["port"], save=False)
+    def configure(self, json_conf):
+        self.service_config.set_service_config(self.name, json.dumps(json_conf))
         # not adding change_mode at this point, as it needs some validation
         self.set_enabled(json_conf["enabled"])
         return

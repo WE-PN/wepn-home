@@ -12,6 +12,7 @@ sys.path.append(up_dir)
 from service import Service
 from wstatus import WStatus as wstatus
 from shadow import Shadow
+from tor import Tor
 
 LOG_CONFIG="/etc/pproxy/logging-debug.ini"
 logging.config.fileConfig(LOG_CONFIG,
@@ -26,10 +27,13 @@ logger = logging.getLogger("shadowsocks")
 #w=wstatus(logger)
 #pprint(w.get_service_status("shadowsocks"))
 
-ss=Shadow(logger)
-current_conf=json.loads(json.dumps(ss.get_config_settings()))
-print(f"overlayed value is {ss.get_start_port()}")
-current_conf["settings"]["start-port"]=8100
-pprint(current_conf)
-ss.apply_config_settings(json.dumps(current_conf["settings"]))
+#ss=Shadow(logger)
+#current_conf=json.loads(json.dumps(ss.get_config_settings()))
+#print(f"overlayed value is {ss.get_start_port()}")
+#current_conf["settings"]["start-port"]=8100
+#pprint(current_conf)
+#ss.apply_config_settings(json.dumps(current_conf["settings"]))
 
+
+t=Tor(logger)
+print(t.get_port())

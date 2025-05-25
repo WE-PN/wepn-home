@@ -728,7 +728,7 @@ class Shadow(Service):
         return self.get_overlayable_config_value("manualPrefix", self.default_prefix)
 
     def is_prefix_enabled(self):
-        return self.get_overlayable_config_value("autoPrefixSelection", self.default_prefix, True)
+        return self.get_overlayable_config_value("autoPrefixSelection", True)
 
     def get_config_settings(self):
         settings_json = {
@@ -743,10 +743,7 @@ class Shadow(Service):
         }
         return settings_json
 
-    def apply_config_settings(self, str_conf):
-        self.service_config.set_service_config(self.name, str_conf)
-        if not isinstance(str_conf, str):
-            str_conf = str(str_conf)
-        json_conf = json.loads(str_conf)
+    def configure(self, json_conf):
+        self.service_config.set_service_config(self.name, json.dumps(json_conf))
         self.set_enabled(json_conf["enabled"])
         return
