@@ -1,6 +1,7 @@
 import atexit
 import dataset
 import hashlib
+import json
 import shlex
 
 from device import Device
@@ -63,15 +64,20 @@ class Tor(Service):
         device.execute_setuid("0 3 0")
 
     def forward_all(self):
-        port = self.config.getint('tor', 'orport')
+        port = int(self.get_port())
         device = Device(self.logger)
         device.open_port(port, "Tor")
         return
 
-    def change_port(self, new_port):
-        port = self.config.getint('tor', 'orport')
-        if port != new_port:
-            self.config.set('tor', 'orport', str(new_port))
+    def get_port(self):
+        return self.get_overlayable_config_value("orport")
+
+    def change_port(self, new_port, save=True):
+        if new_port == "null" or new_port is None or new_port == 0:
+            return
+        port = int(self.get_port())
+        if port != int(new_port):
+            self.service_config.set_service_config(self.name, str(new_port), save)
             self.forward_all()
             self.config.save()
             self.restart()
@@ -145,7 +151,7 @@ class Tor(Service):
         return found
 
     def get_short_link_text(self, cname, ip_address):
-        return ip_address + ":" + str(self.config.get('tor', 'orport'))
+        return ip_address + ":" + str(self.get_port())
 
     def get_add_email_text(self, cname, ip_address, lang, is_new_user=False):
         txt = ''
@@ -161,7 +167,7 @@ class Tor(Service):
             html += "Install Onion Browser, and enter the below link as Tor Bridge address: "
             txt += self.get_short_link_text(cname, ip_address)
             html += "<center><b>" + ip_address + ":" + \
-                self.config.get('tor', 'orport') + "</b></center>"
+                str(self.get_port()) + "</b></center>"
         return txt, html, manuals, subject
 
     def get_removal_email_text(self, certname, ip_address, lang):
@@ -190,7 +196,7 @@ class Tor(Service):
             server = servers.find_one(certname=cname)
             if server is not None:
                 # our tor config right now is vanilla, this needs work
-                uri = server_address + ":" + self.config.get('tor', 'orport')
+                uri = server_address + ":" + str(self.get_port())
                 link = "{\"type\":\"tor\", \"link\":\""
                 link += uri
                 link += "\", \"digest\": \""
@@ -204,3 +210,35 @@ class Tor(Service):
         # TODO: some good testing is really needed here
         success = True
         return success
+
+    def get_mode(self):
+        return self.get_overlayable_config_value("mode", "bridge")
+
+    def set_mode(self, new_mode):
+        if new_mode == "null" or new_mode is None:
+            return
+        current_mode = self.get_mode()
+        if new_mode != current_mode:
+            self.forward_all()
+            self.restart()
+
+    def get_config_settings(self):
+        settings_json = {
+            "name": self.name,
+            "settings": {
+                "enabled": self.is_enabled(),
+                "port": self.get_port(),
+                "mode": self.get_mode(),
+            },
+        }
+        return settings_json
+
+    def apply_config_settings(self, str_conf):
+        self.service_config.set_service_config(self.name, str_conf)
+        if not isinstance(str_conf, str):
+            str_conf = str(str_conf)
+        json_conf = json.loads(str_conf)
+        self.change_port(json_conf["port"], save=False)
+        # not adding change_mode at this point, as it needs some validation
+        self.set_enabled(json_conf["enabled"])
+        return

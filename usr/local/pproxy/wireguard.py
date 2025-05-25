@@ -1,6 +1,7 @@
 from sanitize_filename import sanitize
 import base64
 import hashlib
+import json
 import os
 import re
 import shlex
@@ -38,7 +39,7 @@ class Wireguard(Service):
                     return False
             cmd = '/bin/bash ./add_user_wireguard.sh '
             cmd += self.santizie_service_filename(certname)
-            cmd += " " + self.config.get("wireguard", "wireport")
+            cmd += " " + str(self.get_port())
             self.logger.debug(cmd)
             self.execute_cmd(cmd)
             return self.is_user_registered(certname)
@@ -54,7 +55,7 @@ class Wireguard(Service):
         return
 
     def forward_all(self):
-        port = self.config.get('wireguard', 'wireport')
+        port = int(self.get_port())
         device = Device(self.logger)
         device.open_port(port, "Wireguard")
         return
@@ -179,7 +180,7 @@ class Wireguard(Service):
         html = ''
         subject = ''
         attachments = []
-        if self.config.get('openvpn', 'enabled') == 1 and self.config.get('openvpn', 'email') == 1:
+        if self.config.get('wireguard', 'enabled') == 1 and self.config.get('wireguard', 'email') == 1:
             txt = "Access to VPN server IP address " + ip_address + " is revoked.",
             html = "Access to VPN server IP address " + ip_address + " is revoked.",
 
@@ -222,3 +223,26 @@ class Wireguard(Service):
                     if "[Peer]" in contents:
                         enabled_peers.append(config_file)
         return enabled_peers
+
+    def get_port(self):
+        return self.get_overlayable_config_value("wireport")
+
+    def get_config_settings(self):
+        settings_json = {
+            "name": self.name,
+            "settings": {
+                "enabled": self.is_enabled(),
+                "port": self.get_port(),
+            },
+        }
+        return settings_json
+
+    def apply_config_settings(self, str_conf):
+        self.service_config.set_service_config(self.name, str_conf)
+        if not isinstance(str_conf, str):
+            str_conf = str(str_conf)
+        json_conf = json.loads(str_conf)
+        self.change_port(json_conf["port"], save=False)
+        # not adding change_mode at this point, as it needs some validation
+        self.set_enabled(json_conf["enabled"])
+        return
