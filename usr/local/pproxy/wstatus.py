@@ -1,3 +1,5 @@
+import json
+
 try:
     from configparser import configparser
 except ImportError:
@@ -33,6 +35,8 @@ class WStatus:
         return self.status.has_section(section)
 
     def has_option(self, section, option):
+        if not self.status.has_section(section):
+            return False
         return self.status.has_option(section, option)
 
     def add_section(self, section):
@@ -47,8 +51,12 @@ class WStatus:
     def set_field(self, section, field, value):
         if not isinstance(value, str):
             value = str(value)
-        self.status[section][field] = value
-        self.logger.debug('setting ' + field + ' to ' + value)
+        value = value.replace('%', '%%')
+        try:
+            self.status[section][field] = value
+            self.logger.debug('setting ' + field + ' to ' + value)
+        except:
+            self.logger.exception("could not write a field")
 
     def get(self, field):
         try:
@@ -63,8 +71,12 @@ class WStatus:
             ret = self.status.get(section, field)
             if "[" in ret and "]" in ret:
                 res = ret.strip('][\'\"').split(', ')
+            else:
+                res = ret
             if isinstance(res, list):
                 return res[0]
+            elif isinstance(res, str):
+                return res.replace('%%', '%')
             else:
                 return ret
         except:
@@ -82,3 +94,19 @@ class WStatus:
             # unless a service is overriden, it is enabled
             return True
         return self.status.getboolean(service_name, 'enabled')
+
+    def set_service_config(self, service_name, config_str):
+        values = {}
+        if not self.status.has_section(service_name):
+            self.status.add_section(service_name)
+        if isinstance(config_str, dict):
+            values = config_str
+        elif isinstance(config_str, str):
+            try:
+                values = json.loads(config_str)
+            except:
+                self.logger.exception("Could not load string")
+                return ""
+
+        for k, v in values.items():
+            self.set_field(service_name, str(k), str(v))

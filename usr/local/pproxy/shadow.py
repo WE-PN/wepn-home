@@ -38,7 +38,7 @@ class Shadow(Service):
         fd, self.socket_path = tempfile.mkstemp()
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.prefix = "HTTP%2F1.1%20"
+        self.default_prefix = "HTTP%2F1.1%20"
         try:
             self.sock.bind(self.socket_path)
         except OSError:
@@ -84,7 +84,7 @@ class Shadow(Service):
             except:
                 max_port = None
             if max_port is None:
-                max_port = int(self.config.get('shadow', 'start-port'))
+                max_port = int(self.get_overlayable_config_value("start-port"))
             port = max_port + 1
             port, err = self.diag.find_next_good_port(port)
             if err != 0:
@@ -253,7 +253,7 @@ class Shadow(Service):
             uri = str(self.config.get('shadow', 'method')) + ':' + str(
                 password)
             access_params = '@' + str(ip) + ':' + str(port)
-            if self.prefix is not None:
+            if self.is_prefix_enabled() and self.get_prefix() is not None:
                 access_params += "/?prefix=" + str(self.prefix)
             uri64 = 'ss://' + \
                 base64.urlsafe_b64encode(str.encode(uri)).decode(
@@ -551,7 +551,7 @@ class Shadow(Service):
         except:
             max_port = None
         if max_port is None:
-            max_port = int(self.config.get('shadow', 'start-port'))
+            max_port = int(self.get_overlayable_config_value("start-port"))
         return max_port
 
     def init_shadowsocks_folder(self):
@@ -720,3 +720,33 @@ class Shadow(Service):
                 if self.db_changed():
                     result = self.backup()
         return result
+
+    def get_start_port(self):
+        return self.get_overlayable_config_value("start-port")
+
+    def get_prefix(self):
+        return self.get_overlayable_config_value("manualPrefix", self.default_prefix)
+
+    def is_prefix_enabled(self):
+        return self.get_overlayable_config_value("autoPrefixSelection", self.default_prefix, True)
+
+    def get_config_settings(self):
+        settings_json = {
+            "name": self.name,
+            "settings": {
+                "enabled": self.is_enabled(),
+                "port": self.get_start_port(),
+                "manualPrefix": self.get_prefix(),
+                "portRangeStart": self.get_start_port(),
+                "autoPrefixSelection": self.is_prefix_enabled(),
+            },
+        }
+        return settings_json
+
+    def apply_config_settings(self, str_conf):
+        self.service_config.set_service_config(self.name, str_conf)
+        if not isinstance(str_conf, str):
+            str_conf = str(str_conf)
+        json_conf = json.loads(str_conf)
+        self.set_enabled(json_conf["enabled"])
+        return
