@@ -79,8 +79,6 @@ then
 fi
 
 # clear past rules in NAT
-iptables -t nat -L -n
-ip6tables -t nat -L -n
 iptables -t nat -F
 ip6tables -t nat -F
 
@@ -96,7 +94,6 @@ then
 			ip6tables -t nat -A OUTPUT ! -o lo -p $proto -m owner --uid-owner $USER --dport $dport -m $proto -j REDIRECT --to-ports $DEST_PORT
 		done
 	done
-	iptables -t nat -L -n
 else
 	# route only select routes that cause below problem, not all of the traffic
 
@@ -112,6 +109,8 @@ else
 	wget -4 -T10 https://www.gstatic.com/ipranges/goog.txt -O goog.txt
 	wget -4 -T10 https://www.gstatic.com/ipranges/cloud.json -O cloud.json
 	# google ones
+	#
+	# TODO: exteremly unlikely, but to be safe need to sanitize the incoming text files too
 
 	for ip in `cat goog.txt | grep -v 8\.8\.`; do
 		do_iptables $ip
@@ -124,13 +123,13 @@ else
 		do_iptables $ip
 	done
 
-	jq ".prefixes[].ipv4Prefix" cloud.json  -c --raw-output | grep -v "syncToken" | grep -v null | while read ip; do
+	jq ".prefixes[].ipv4Prefix" cloud.json  -c --raw-output | grep -v null | while read ip; do
 		do_iptables $ip
 	done
 
 
 
-	jq ".prefixes[].ipv6Prefix" cloud.json  -c --raw-output | grep -v "syncToken" | grep -v null | while read ip; do
+	jq ".prefixes[].ipv6Prefix" cloud.json  -c --raw-output | grep -v null | while read ip; do
 		do_iptables $ip
 	done
 fi
