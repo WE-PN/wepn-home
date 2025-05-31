@@ -232,7 +232,7 @@ class Wireguard(Service):
             "name": self.name,
             "settings": {
                 "enabled": self.is_enabled(),
-                "port": self.get_port(),
+                "port": str(self.get_port()),
             },
         }
         return settings_json

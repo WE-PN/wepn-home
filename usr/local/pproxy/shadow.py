@@ -25,7 +25,6 @@ from service import Service
 
 ipw = IPW()
 
-CONFIG_FILE = '/etc/pproxy/config.ini'
 SHADOWSOCKS_FOLDER = '/usr/local/pproxy/.shadowsocks/'
 
 
@@ -737,8 +736,8 @@ class Shadow(Service):
                 "enabled": self.is_enabled(),
                 "port": self.get_start_port(),
                 "manualPrefix": self.get_prefix(),
-                "portRangeStart": self.get_start_port(),
-                "autoPrefixSelection": self.is_prefix_enabled(),
+                "portRangeStart": str(self.get_start_port()),
+                "autoPrefixSelection": str(self.is_prefix_enabled()),
             },
         }
         return settings_json

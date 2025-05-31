@@ -559,7 +559,7 @@ class PProxy():
             self.logger.debug(new_config)
             # service_name = self.sanitize_str(data["service_name"])
             # config = data["config"]
-            # services.configure(service_name, config)
+            services.configure(new_config["config"])
         elif (data['action'] == 'wipe_device'):
             # very important action: make sure all VPN/ShadowSocks are deleted, and stopped
             # now reset the status bits

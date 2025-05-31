@@ -24,6 +24,7 @@ class SSH(Service):
             "name": self.name,
             "settings": {
                 "enabled": self.is_enabled(),
+                "port": "22"
             },
             "secure_settings": {
                 "nonce": "",

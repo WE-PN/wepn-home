@@ -34,7 +34,7 @@ serial_number = config.get('django', 'serial_number'),
 device_key = config.get('django', 'device_key'),
 logger = logging.getLogger()
 services = Services(logger)
-cfg = services.get_config_string()
+cfg = services.get_config_string("0")
 data = {
     "id": device_id,
     "serial_number": config.get('django', 'serial_number'),
@@ -42,11 +42,9 @@ data = {
     "config": cfg,
 }
 data_json = json.dumps(data)
-pprint.pprint(data)
-exit
 headers = {"Content-Type": "application/json"}
 try:
-    response = requests.get(url, data=data_json, headers=headers, timeout=10)
+    response = requests.patch(url, data=data_json, headers=headers, timeout=10)
     pprint.pprint(response)
 except requests.exceptions.RequestException as exception_error:
     print("Error in sending heartbeat: \r\n\t" + str(exception_error))

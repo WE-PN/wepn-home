@@ -1,3 +1,4 @@
+CONFIG_FILE = '/etc/pproxy/config.ini'
 CONFIG_SERVER_URL = "https://config.we-pn.com"
 CONNECTIVITY_TEST_URLS = [
     "https://status.we-pn.com",
@@ -14,5 +15,6 @@ DEFAULT_UPNP_TIMEOUT = 86400
 ERROR_LOG_FILE = "/var/local/pproxy/error.log"
 FORCE_SCREEN_ON = False
 HEALTHY_DIAG_CODE = 127
-LOG_CONFIG = "/etc/pproxy/logging.ini"
+LOG_CONFIG = "/etc/pproxy/logging-debug.ini"
+SERVICE_FILE_BASE = "/var/local/pproxy/"
 SKIP_OTA_CHECK = False

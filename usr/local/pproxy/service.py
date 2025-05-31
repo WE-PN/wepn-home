@@ -3,10 +3,10 @@ try:
     from configparser import configparser
 except ImportError:
     import configparser
+from constants import CONFIG_FILE
+from constants import SERVICE_FILE_BASE
 from wstatus import WStatus
 
-CONFIG_FILE = '/etc/pproxy/config.ini'
-SERVICE_FILE_BASE = "/var/local/pproxy/"
 # setuid command runner
 SRUN = "/usr/local/sbin/wepn-run"
 
@@ -128,8 +128,14 @@ class Service:
         return settings_json
 
     def configure(self, str_conf):
-        json_conf = json.loads(str_conf)
-        self.set_enabled(json_conf["settings"]["enabled"])
+        if isinstance(str_conf, str):
+            json_conf = json.loads(str_conf)
+        else:
+            json_conf = str_conf
+        try:
+            self.set_enabled(json_conf["enabled"])
+        except:
+            self.logger.exception("error setting enabled")
         return
 
     def get_overlayable_config_value(self, field_name, default=None):

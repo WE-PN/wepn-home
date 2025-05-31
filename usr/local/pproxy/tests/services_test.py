@@ -79,7 +79,7 @@ cfg= {
          },
       },
       {
-         "name": "OONI",
+          "name": "OONI",
          "settings": {
             "enabled": True,
             "probeEnabled": False,
@@ -112,6 +112,10 @@ cfg= {
    ],
 }
 
+
 from pprint import pprint
 a.configure(cfg)
 pprint(a.get_config_string())
+print(a.get_saved_server_config_version())
+#if a.get_saved_server_config_version() == "":
+#    a.save_server_config_version("88")

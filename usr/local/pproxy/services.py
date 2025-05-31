@@ -1,5 +1,3 @@
-import calendar
-import datetime
 import json
 import re
 from sanitize_filename import sanitize
@@ -12,13 +10,15 @@ from ssh import SSH
 from tor import Tor
 from wifi import WiFi
 from wireguard import Wireguard
+from wstatus import WStatus
 
 try:
     from configparser import configparser
 except ImportError:
     import configparser
 
-CONFIG_FILE = '/etc/pproxy/config.ini'
+from constants import CONFIG_FILE
+from constants import SERVICE_FILE_BASE
 
 
 class Services:
@@ -35,6 +35,8 @@ class Services:
         self.services.append({'name': 'wifi', 'obj': WiFi(logger)})
         self.services.append({'name': 'wireguard', 'obj': Wireguard(logger)})
         self.logger = logger
+        path = SERVICE_FILE_BASE + "/services.ini"
+        self.service_config = WStatus(logger, source_file=path)
         return
 
     def santizie_service_filename(self, filename):
@@ -175,6 +177,20 @@ class Services:
             result &= service['obj'].self_test()
         return result
 
+    def save_server_config_version(self, version):
+        self.logger.debug("setting the server config" + str(version))
+        if not self.service_config.has_section("server"):
+            self.service_config.add_section("server")
+        self.service_config.set_field("server", "version", version)
+        self.service_config.save()
+
+    def get_saved_server_config_version(self):
+        self.logger.debug("getting the server config")
+        if self.service_config.has_option("server", "version"):
+            return self.service_config.get_field("server", "version")
+        else:
+            return ""
+
     def configure(self, config_data):
         if isinstance(config_data, dict):
             config_json = config_data
@@ -186,12 +202,16 @@ class Services:
             for service in self.services:
                 if service['name'] == service_name:
                     service['obj'].configure(service_config["settings"])
+        try:
+            self.save_server_config_version(config_json["config_version"])
+        except:
+            self.logger.exception("could not save config version")
 
-    def get_config_string(self):
-        date = datetime.datetime.utcnow()
-        utc_time = calendar.timegm(date.utctimetuple())
+    def get_config_string(self, version=None):
+        if version is None:
+            version = self.get_saved_server_config_version()
         result = {
-            "config_version": utc_time,
+            "config_version": version,
             "services": [],
         }
         for service in self.services:

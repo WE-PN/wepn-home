@@ -10,8 +10,6 @@ from service import Service
 
 ipw = IPW()
 
-CONFIG_FILE = '/etc/pproxy/config.ini'
-
 
 class Tor(Service):
     def __init__(self, logger):
