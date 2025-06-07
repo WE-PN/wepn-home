@@ -187,9 +187,9 @@ class Services:
     def get_saved_server_config_version(self):
         self.logger.debug("getting the server config")
         if self.service_config.has_option("server", "version"):
-            return self.service_config.get_field("server", "version")
+            return int(self.service_config.get_field("server", "version"))
         else:
-            return ""
+            return 0
 
     def configure(self, config_data):
         if isinstance(config_data, dict):
@@ -211,7 +211,7 @@ class Services:
         if version is None:
             version = self.get_saved_server_config_version()
         result = {
-            "config_version": version,
+            "config_version": int(version),
             "services": [],
         }
         for service in self.services:
