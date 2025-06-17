@@ -703,20 +703,29 @@ class KEYPAD:
         # while initial provisioning is happening
         # first try the web method, needs manual action from support
         # this happens in pod owners' homes, rarely
-        fetched = self.device.fetch_config_from_backend()
-        generated = False
-        if not fetched:
-            # if no claim is set, then try the USB methods
-            # this is what happens in assembly line during provisioning
-            generated = self.device.generate_new_config()
+
+        # if no claim is set, then try the USB methods
+        # this is what happens in assembly line during provisioning
+        fetched = False
+        generated = self.device.generate_new_config()
+        info_str = "Please reboot ..."
+        if not generated:
+            fetched = self.device.fetch_config_from_backend()
+            info_str = "Rebooting ..."
         if generated or fetched:
             self.config.read(CONFIG_FILE)
             serial = self.config.get('django', 'serial_number')
+            device_id = self.config.get('django', 'id')
             display_str = [(1, "Updated serial:", 0, "white"),
                            (2, str(serial), 0, "white"),
-                           (3, "Rebooting ...", 0, "white")]
+                           (3, "Updated ID:", 0, "white"),
+                           (4, str(device_id), 0, "white"),
+                           (5, info_str, 0, "white")]
             self.lcd.display(display_str, 18)
-        self.device.reboot()
+        if fetched:
+            # Fetching is used mainly for remote customers,
+            # so we reboot automatically.
+            self.device.reboot()
 
     def update_ssh_remote_status(self):
         ssh_running = self.device.is_ssh_service_running()
