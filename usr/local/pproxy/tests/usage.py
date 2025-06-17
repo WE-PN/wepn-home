@@ -71,6 +71,6 @@ def print_all_usage():
 # del_user(1)
 print_all()
 print_all_usage()
-del_user_usage("8i.vy; select * from usage")
-delete_left_over_usage()
+#del_user_usage("8i.vy; select * from usage")
+#delete_left_over_usage()
 #print_all_usage()

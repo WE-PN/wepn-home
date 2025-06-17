@@ -317,35 +317,21 @@ class Shadow(Service):
         return link
 
     def get_usage_status_summary(self):
-        self.logger = logging.getLogger(__name__)
-        # create console handler and set level to debug
-        ch = logging.StreamHandler()
-        ch.setLevel(logging.DEBUG)
-
-        # create formatter
-        formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        # add formatter to ch
-        ch.setFormatter(formatter)
-        # add ch to logger
-        self.logger.addHandler(ch)
-
         self.logger.debug("---summary -----")
         local_db = dataset.connect(
             'sqlite:///' + self.config.get('shadow', 'db-path') + "?check_same_thread=False")
         servers = local_db['servers']
         usage_results = {}
+        usage_deltas = {}
         if not servers or not self.is_enabled():
             self.logger.debug("No servers found for usage")
-            return {}
+            return {}, {}
         # get usage statistics from ss-manager
         cmd = 'ping'
-        self.logger.debug(cmd)
         self.sock.send(str.encode(cmd))
         # ping response has some text, remove it
         raw_str = str(self.sock.recv(1056)).replace(
             "b'stat:", "").replace("'", "")
-        self.logger.debug(raw_str)
         response = json.loads(raw_str)
         usage_db = dataset.connect(
             'sqlite:///' + self.config.get('shadow', 'db-path') + "?check_same_thread=False")
@@ -363,6 +349,7 @@ class Shadow(Service):
                 usage_server = None
                 usage_status = -1
                 current_usage = 0
+                delta = 0
                 server_name = str(server['server_port'])
                 if server_name in response:
                     current_usage = response[server_name]
@@ -373,6 +360,7 @@ class Shadow(Service):
                 if usage_server is None or usage_server['usage'] is None or 'usage' not in usage_server:
                     # not yet in the database
                     usage_value = current_usage
+                    delta = current_usage
                     self.logger.debug(
                         "Usage not in db yet. value=" + str(usage_value))
                 else:
@@ -382,14 +370,15 @@ class Shadow(Service):
                     # already has some value in usage db
                     if usage_server['usage'] > current_usage:
                         # wrap around, device recently rebooted?
-                        print("usage value has gone down!!")
-                        usage_value = current_usage + usage_server['usage']
+                        self.logger.debug(f"usage value has gone down!! {server['certname']} {current_usage} -- db: {usage_server['usage']}")
+                        usage_value = current_usage
                         # some of the data usage is lost, but we get the estimate
+                        delta = current_usage
                     else:
                         # not a wrap around, just replace
                         usage_value = current_usage
                         # how many bytes used since last update
-                        # delta = current_usage - usage_server['usage']
+                        delta = current_usage - usage_server['usage']
                 self.logger.debug("usage value = " + str(usage_value))
                 if usage_value > 0:
                     usage_status = 1
@@ -397,6 +386,12 @@ class Shadow(Service):
                                   ' server_port:' + str(server['server_port']) +
                                   ' usage:' + str(usage_value) +
                                   ' status:' + str(usage_status))
+                usage_deltas[server['certname']] = delta
+
+                ####################################################
+                # Now add it to the daily log of the server
+                ####################################################
+
                 today = datetime.today().strftime('%Y-%m-%d')
                 usage_today = usage_daily.find_one(
                     certname=server['certname'], date=today)
@@ -417,6 +412,8 @@ class Shadow(Service):
                         # set start to 0, end to a fake adjustment
                         past_delta = usage_today['end_usage'] - \
                             usage_today['start_usage']
+                        # we create a fake start that starts earlier, so that future end values
+                        # can directly come from ShadowSocks socket.
                         fake_start = usage_value - past_delta
                         usage_daily.upsert({'certname': server['certname'],
                                             'date': today,
@@ -424,7 +421,6 @@ class Shadow(Service):
                                             'start_usage': fake_start,
                                             'type': 'shadow',
                                             'end_usage': usage_value}, ['certname', 'date'])
-                        print("wrap around: " + str(fake_start))
                     else:
                         # all is normal, just update the end
                         usage_daily.upsert({'certname': server['certname'],
@@ -437,13 +433,15 @@ class Shadow(Service):
                                       'server_port': server['server_port'],
                                       'usage': usage_value,
                                       'status': usage_status}, ['certname'])
+
+                # append to the results of the current call
                 usage_results[server['certname']] = usage_status
 
             except KeyError as e:
                 self.logger.error("Port not found in ping stats: " + str(e))
-        return usage_results
+        return usage_results, usage_deltas
 
-    def get_usage_daily(self):
+    def get_usage_daily(self, day_date=None):
         local_db = dataset.connect(
             'sqlite:///' + self.config.get('shadow', 'db-path') + "?check_same_thread=False")
         servers = local_db['servers']
@@ -452,10 +450,16 @@ class Shadow(Service):
         usage_daily = usage_db['daily']
         days = {}
         for server in servers:
-            usage_days = usage_daily.find(certname=server['certname'])
+            if day_date is None:
+                usage_days = usage_daily.find(certname=server['certname'])
+            else:
+                usage_days = usage_daily.find(certname=server['certname'], date=str(day_date))
             for day in usage_days:
                 try:
-                    if day['end_usage'] < day['start_usage']:
+                    if day['end_usage'] == day['start_usage']:
+                        use = day['end_usage']
+                    elif day['end_usage'] < day['start_usage']:
+                        # usage probably got reset, do your best
                         # some information is lost here, better than negative
                         if day['end_usage'] == 0:
                             # we lost the ending data
@@ -463,6 +467,7 @@ class Shadow(Service):
                         else:
                             use = day['end_usage']
                     else:
+                        # normal case, we know all we need
                         use = day["end_usage"] - day["start_usage"]
                 except:
                     use = 0
@@ -472,6 +477,14 @@ class Shadow(Service):
                 days[day['certname']].append({  # "certname":day["certname"],
                     "date": day["date"],
                     "usage": use})
+                if day_date is None:
+                    if day['certname'] not in days:
+                        days[day['certname']] = []
+                    days[day['certname']].append({  # "certname":day["certname"],
+                        "date": day["date"],
+                        "usage": use})
+                else:
+                    days[day['certname']] = use
         local_db.close()
         return days
 
@@ -677,7 +690,6 @@ class Shadow(Service):
             results = local_db.query('pragma integrity_check')
             integrity_check = list(results)
             for check in integrity_check:
-                print("check = " + str(check))
                 for test, result in check.items():
                     print(test + "=" + result)
                     # If the db is corrupted

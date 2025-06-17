@@ -65,7 +65,7 @@ class OpenVPN(Service):
         return {}
 
     def get_usage_status_summary(self):
-        return {}
+        return {}, {}
 
     def get_usage_daily(self):
         return {}

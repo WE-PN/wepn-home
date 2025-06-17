@@ -111,17 +111,18 @@ class Tor(Service):
         local_db = dataset.connect(
             'sqlite:///' + self.config.get('tor', 'db-path') + "?check_same_thread=False")
         servers = local_db['servers']
-        creds = {}
+        usages = {}
+        deltas = {}
         if not servers or not self.is_enabled():
-            self.logger.debug("No servers found for Tor access creds")
-            return {}
+            self.logger.debug("No servers found for Tor access usages")
+            return {}, {}
         for server in local_db['servers']:
             if server['certname'] == "''" or not server['certname']:
                 self.logger.error("Certname is empty, skipping")
                 continue
-            self.logger.debug("creds for " + server['certname'])
-            creds[server['certname']] = -1
-        return creds
+            self.logger.debug("usage for " + server['certname'])
+            usages[server['certname']] = -1
+        return usages, deltas
 
     def get_usage_daily(self):
         return ""

@@ -140,7 +140,7 @@ class HeartBeat:
         else:
             status = int(self.status.get('state'))
         access_creds = self.services.get_service_creds_summary(external_ip)
-        usage_status = self.services.get_usage_status_summary()
+        usage_status, usage_deltas = self.services.get_usage_status_summary()
         self.logger.debug(usage_status)
         try:
             with open('local_server/wepn-local.sig') as f:
@@ -167,6 +167,7 @@ class HeartBeat:
             "diag_code": diag_code,
             "access_cred": access_creds,
             "usage_status": usage_status,
+            "usage_deltas": usage_deltas,
             "public_key": signature,
             "log": logs,
         }
