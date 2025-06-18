@@ -171,8 +171,11 @@ class Services:
         return "{\"type\":\"empty\", \"link\":\"\", \"digest\": \"\" }"
 
     def recover_missing_servers(self):
-        for service in self.services:
-            service['obj'].recover_missing_servers()
+        try:
+            for service in self.services:
+                service['obj'].recover_missing_servers()
+        except Exception:
+            self.logger.exception("could not recover servers")
 
     def self_test(self):
         result = True

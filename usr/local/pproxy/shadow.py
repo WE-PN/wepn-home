@@ -253,13 +253,14 @@ class Shadow(Service):
                 password)
             access_params = '@' + str(ip) + ':' + str(port)
             if self.is_prefix_enabled() and self.get_prefix() is not None:
-                access_params += "/?prefix=" + str(self.prefix)
+                access_params += "/?prefix=" + str(self.get_prefix())
             uri64 = 'ss://' + \
                 base64.urlsafe_b64encode(str.encode(uri)).decode(
                     'utf-8') + access_params + "#WEPN-" + certname
             hash_link = hashlib.sha256(uri64.encode()).hexdigest()[:10]
             return uri64, hash_link
         except:
+            self.logger.exception("create_link_and_hash")
             return "", ""
 
     def get_service_creds_summary(self, ip_address):

@@ -444,6 +444,7 @@ class PProxy():
                         self.leds.fill_upto(color=(0, 0, 255),
                                             percentage=1,
                                             wait=50)
+                        services.recover_missing_servers()
                     txt, html, attachments, subject = services.get_add_email_text(
                         username, server_address, lang, tunnel, is_new_user)
                 except BaseException:
