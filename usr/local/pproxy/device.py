@@ -276,7 +276,10 @@ class Device():
     def close_port(self, port):
         if not self.should_skip_upnp():
             # no skipping, just try opening port normally with UPNP
-            self.set_port_forward("close", port, "")
+            try:
+                self.set_port_forward("close", port, "")
+            except upnp.soap.SOAPError:
+                self.set_port_forward("close", port, "", retry=True)
 
     def get_all_port_mappings(self):
         still_counting = True
