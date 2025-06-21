@@ -251,6 +251,13 @@ chown pproxy:shadow-runners /var/local/pproxy/shadow/shadow.sock
 chown pproxy:shadow-runners /var/local/pproxy/
 
 ##############################################################################
+# Fetch the geolocation database
+##############################################################################
+
+/bin/bash $PPROXY_HOME/setup/fetch_geolocation_db.sh
+
+
+##############################################################################
 # Create SSL invalid certifcates
 ##############################################################################
 echo -e "\n Setting up the local INVALID certificates"
