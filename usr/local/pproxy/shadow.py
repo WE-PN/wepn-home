@@ -22,6 +22,7 @@ from device import Device
 from diag import WPDiag
 from ipw import IPW
 from service import Service
+from metrics_client import MetricsClient
 
 ipw = IPW()
 
@@ -38,6 +39,7 @@ class Shadow(Service):
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.default_prefix = "HTTP%2F1.1%20"
+        self.metrics = MetricsClient(logger=self.logger)
         try:
             self.sock.bind(self.socket_path)
         except OSError:
@@ -113,6 +115,7 @@ class Shadow(Service):
             self.logger.debug("server: " + str(a))
         local_db.commit()
         local_db.close()
+        self.metrics.add_ports([port, ])
         return is_new_user
 
     def del_user_usage(self, certname):
@@ -145,6 +148,7 @@ class Shadow(Service):
             self.logger.info('disabling port forwarding to port ' + str(port))
             device = Device(self.logger)
             device.close_port(port)
+            self.metrics.remove_ports([port, ])
         self.del_user_usage(cname)
         # retrun success or failure if file doesn't exist
         if 0 and local_db is not None:
@@ -186,6 +190,7 @@ class Shadow(Service):
         self.shadow_conf_file_save(
             server['server_port'], server['password'])
         self.logger.debug(cmd + ' >> ' + str(self.sock.recv(1056)))
+        self.metrics.add_ports([server['server_port'], ])
 
     def start_all(self):
         # used at boot time
@@ -215,6 +220,7 @@ class Shadow(Service):
                 self.sock.send(str.encode(cmd))
                 self.logger.debug(
                     server['certname'] + ' >>' + cmd + ' >> ' + str(self.sock.recv(1056)))
+                self.metrics.remove_ports([server['server_port', ]])
             return
         except Exception:
             return

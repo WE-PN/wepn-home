@@ -276,8 +276,10 @@ systemctl daemon-reload
 systemctl enable wepn-api
 systemctl enable wepn-keypad
 systemctl enable wepn-leds
+systemctl enable wepn-metrics
 systemctl start wepn-api
 systemctl start wepn-keypad
+systemctl start wepn-metrics
 systemctl start wepn-leds
 cd $PPROXY_HOME/setup/
 

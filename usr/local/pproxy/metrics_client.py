@@ -1,9 +1,10 @@
 import json
 import logging
-from logging import config # noqa
+from logging import config  # noqa
 import socket
 
 from constants import LOG_CONFIG
+from constants import METRICS_PORT
 logging.config.fileConfig(LOG_CONFIG,
                           disable_existing_loggers=False)
 
@@ -18,7 +19,8 @@ class MetricsClient:
     - List currently monitored ports
     - Get a report of observed connections
     """
-    def __init__(self, host: str, port: int, logger=None):
+
+    def __init__(self, host: str = None, port: int = None, logger=None):
         """
         Initializes the client with the server's address.
 
@@ -27,8 +29,14 @@ class MetricsClient:
             port (int): The port number the monitoring server is listening on.
             logger (Python Logger): A default logger, if caller wants to capture logs
         """
-        self.host = host
-        self.port = port
+        if host is not None:
+            self.host = host
+        else:
+            self.host = '127.0.0.1'
+        if port is not None:
+            self.port = port
+        else:
+            self.port = METRICS_PORT
         if logger is not None:
             self.logger = logger
         else:
@@ -42,12 +50,8 @@ class MetricsClient:
             command_dict (dict): The command to send as a Python dictionary.
 
         Returns:
-            dict: The parsed JSON response from the server.
-
-        Raises:
-            IOError: If there's a network communication error.
-            json.JSONDecodeError: If the server sends invalid JSON.
-            ValueError: If the server's response indicates an error.
+            dict: The parsed JSON response from the server. Dict has single
+                    member "error" if error occurs.
         """
         self.logger.debug(f"Sending command: {json.dumps(command_dict)}")
         try:
@@ -76,32 +80,32 @@ class MetricsClient:
                 self.logger.debug(f"Received raw response: {json_response_str}")
 
                 if not json_response_str:
-                    raise IOError("Received empty response from server.")
+                    self.logger.error("Received empty response from server.")
+                    return {"error": "empty response"}
 
                 # Parse the JSON response
                 response_data = json.loads(json_response_str)
 
                 # Check for server-side errors
                 if response_data.get("status") == "error":
-                    raise ValueError(f"Server error: {response_data.get('message', 'Unknown server error')}")
+                    return {"error": f"Server error: {response_data.get('message', 'Unknown server error')}"}
 
                 return response_data
 
         except socket.timeout as e:
             self.logger.error(f"Socket timeout during communication: {e}")
-            raise IOError(f"Connection timed out: {e}") from e
+            return {"error": f"Connection timed out: {e}"}
         except ConnectionRefusedError:
             self.logger.error(f"Connection refused by server at {self.host}:{self.port}")
-            raise IOError(f"Could not connect to server at {self.host}:{self.port}. Is it running?")
+            return {"error": f"Could not connect to server at {self.host}:{self.port}. Is it running?"}
         except socket.error as e:
             self.logger.error(f"Socket error during communication: {e}")
-            raise IOError(f"Network error: {e}") from e
+            return {"error": f"Network error: {e}"}
         except json.JSONDecodeError as e:
             self.logger.error(f"Invalid JSON received from server: {e}\nRaw: {json_response_str}")
-            raise json.JSONDecodeError(f"Invalid JSON response: {e}", e.doc, e.pos) from e
+            return {"error": f"Invalid JSON response: {e}"}
         except Exception as e:
-            self.logger.error(f"An unexpected error occurred in _send_command: {e}", exc_info=True)
-            raise
+            return {"error": f"An unexpected error occurred in _send_command: {e}"}
 
     def add_ports(self, ports: list) -> dict:
         """

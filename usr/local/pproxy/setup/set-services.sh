@@ -23,6 +23,7 @@ fi
 
 $SYSTEMCTL restart wepn-leds
 $SYSTEMCTL restart wepn-keypad
+$SYSTEMCTL restart wepn-metrics
 $SYSTEMCTL restart wepn-api
 $SYSTEMCTL restart shadowsocks-libev
 $SYSTEMCTL restart shadowsocks-libev-manager

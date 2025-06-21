@@ -10,6 +10,7 @@ from lcd import LCD as LCD
 from services import Services
 from shadow import Shadow
 from wstatus import WStatus
+from metrics_client import MetricsClient
 
 ipw = IPW()
 
@@ -36,6 +37,7 @@ class HeartBeat:
         self.status = WStatus(logger)
         self.diag = WPDiag(logger)
         self.services = Services(logger)
+        self.metrics = MetricsClient(logger=self.logger)
         # This one is displayed on screen for call verification
         self.pin = random.SystemRandom().randint(1111111111, 9999999999)
         # This one is used for API access
@@ -154,6 +156,10 @@ class HeartBeat:
             logs = {"ports": ports, 'num_port_fwds': num_forwards}
         except:
             logs = "{'error':'Could not get port mappings'}"
+        try:
+            usage_countries = self.metrics.get_report()
+        except:
+            usage_countries = {}
         data = {
             "serial_number": self.config.get('django', 'serial_number'),
             "ip_address": external_ip,
@@ -168,6 +174,7 @@ class HeartBeat:
             "access_cred": access_creds,
             "usage_status": usage_status,
             "usage_deltas": usage_deltas,
+            "usage_countries": usage_countries,
             "public_key": signature,
             "log": logs,
         }
