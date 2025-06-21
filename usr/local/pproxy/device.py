@@ -265,7 +265,11 @@ class Device():
             outside_port = port
         if not self.should_skip_upnp():
             # no skipping, just try opening port normally with UPNP
-            result = self.set_port_forward("open", port, text, outside_port, timeout)
+            try:
+                result = self.set_port_forward("open", port, text, outside_port, timeout)
+            except upnp.soap.SOAPError:
+                result = self.set_port_forward("open", port, text, outside_port, 0, retry=True)
+
         self.logger.info("port forward result = " + str(result))
         return result
 
@@ -333,7 +337,7 @@ class Device():
                     return port_mapper.GetGenericPortMappingEntry(
                         NewPortMappingIndex=index_num,)
 
-    def set_port_forward(self, open_close, port, text, outside_port=None, timeout=DEFAULT_UPNP_TIMEOUT):
+    def set_port_forward(self, open_close, port, text, outside_port=None, timeout=DEFAULT_UPNP_TIMEOUT, retry=False):
         result = True
         if outside_port is None:
             outside_port = port
@@ -391,8 +395,14 @@ class Device():
                     if ret:
                         self.logger.critical(
                             "return of port forward" + str(ret))
+            except upnp.soap.SOAPError:
+                if not retry:
+                    raise
+                else:
+                    failed += 1
+                    result = False
             except Exception as err:
-                self.logger.error("Port forward operation failed: " + str(err))
+                self.logger.exception("Port forward operation failed: " + str(err))
                 failed += 1
                 result = False
 
