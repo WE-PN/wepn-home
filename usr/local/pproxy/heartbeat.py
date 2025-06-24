@@ -3,6 +3,7 @@ import json
 import random
 import requests
 
+from datetime import datetime
 from device import Device
 from diag import WPDiag
 from ipw import IPW
@@ -160,7 +161,11 @@ class HeartBeat:
             usage_countries = self.metrics.get_report()
         except:
             usage_countries = {}
+        last_ts = self.status.status.getint("status", "last_heartbeat_timestamp")
+        timestamp = int(round(datetime.now().timestamp()))
+        hb_time_delta = timestamp - last_ts
         data = {
+            "time_detla": hb_time_delta,
             "serial_number": self.config.get('django', 'serial_number'),
             "ip_address": external_ip,
             "status": str(status),
@@ -183,6 +188,7 @@ class HeartBeat:
         self.status.set('prev_token', str(prev_token))
         self.status.set('local_token', str(self.local_token))
         self.status.set('last_diag_code', str(diag_code))
+        self.status.set('last_heartbeat_timestamp', str(timestamp))
         self.status.save()
 
         data_json = json.dumps(data)
