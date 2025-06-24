@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 # Global shared data and lock
 # _ports_to_monitor: Set of ports currently being monitored. Dynamically updated.
 _ports_to_monitor = set()
+_port_to_name_map = {}
 
 # _connections_for_next_report_per_port: { port_num: set( (ip, asn, country), ... ), ... }
 # This set accumulates all unique connections observed as active within the current reporting cycle
@@ -217,7 +218,7 @@ if __name__ == "__main__":
         logger.info(
             f"Listening for client commands and JSON reports on {LISTENING_HOST}:{METRICS_PORT}.")
         logger.info("Commands (send as JSON to this port):")
-        logger.info("  - Add ports:    {\"command\": \"add_ports\",    \"ports\": [80, 443]}")
+        logger.info("  - Add ports:    {\"command\": \"add_ports\", \"ports\": [{\"port\": 443, \"name\": \"https\"}, {\"port\": 22, \"name\": \"ssh\"}]}")
         logger.info("  - Remove ports: {\"command\": \"remove_ports\", \"ports\": [22]}")
         logger.info("  - List ports:   {\"command\": \"list_ports\"}")
         logger.info("  - Get report:   {\"command\": \"get_report\"}")
@@ -237,22 +238,16 @@ if __name__ == "__main__":
                 response = {"status": "error", "message": "Invalid command or parameters."}
 
                 if command == "add_ports":
-                    ports_to_manage = command_data.get("ports")
-                    if isinstance(ports_to_manage, list) and all(isinstance(p, int) for p in ports_to_manage):
-                        with _data_lock:
-                            initial_count = len(_ports_to_monitor)
-                            _ports_to_monitor.update(ports_to_manage)
-                            for p in ports_to_manage:
-                                if p not in _connections_for_next_report_per_port:
-                                    _connections_for_next_report_per_port[p] = set()
-                            added_count = len(_ports_to_monitor) - initial_count
-                        response = {
-                            "status": "success", "message": f"Added {added_count} new ports. Currently monitoring: {sorted(list(_ports_to_monitor))}"}
-                        logger.info(f"Updated monitored ports: {sorted(list(_ports_to_monitor))}")
-                    else:
-                        response = {"status": "error",
-                                    "message": "'ports' must be a list of integers."}
-
+                    initial_count = len(_ports_to_monitor)
+                    port_map_to_manage = command_data.get("ports")
+                    for pm in port_map_to_manage:
+                        _ports_to_monitor.add(pm["port"])
+                        _port_to_name_map[pm["port"]] = pm["name"]
+                        if pm["port"] not in _connections_for_next_report_per_port:
+                            _connections_for_next_report_per_port[pm["port"]] = set()
+                    added_count = len(_ports_to_monitor) - initial_count
+                    response = {
+                        "status": "success", "message": f"Added {added_count} new ports. Currently monitoring: {sorted(list(_ports_to_monitor))}"}
                 elif command == "remove_ports":
                     ports_to_manage = command_data.get("ports")
                     if isinstance(ports_to_manage, list) and all(isinstance(p, int) for p in ports_to_manage):
@@ -308,7 +303,7 @@ if __name__ == "__main__":
                                     })
 
                                 if connections_for_report:
-                                    report_data["connections"][f"{port}"] = connections_for_report
+                                    report_data["connections"][_port_to_name_map[port]] = connections_for_report
 
                                 _connections_for_next_report_per_port[port].clear()
                                 if port not in _connections_for_next_report_per_port:

@@ -117,7 +117,7 @@ class MetricsClient:
         Returns:
             dict: The server's success response message.
         """
-        if not isinstance(ports, list) or not all(isinstance(p, int) for p in ports):
+        if not isinstance(ports, list) or not all(isinstance(p, dict) for p in ports):
             raise ValueError("Ports must be a list of integers.")
         command = {"command": "add_ports", "ports": ports}
 

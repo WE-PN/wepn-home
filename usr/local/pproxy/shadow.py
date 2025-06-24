@@ -115,7 +115,7 @@ class Shadow(Service):
             self.logger.debug("server: " + str(a))
         local_db.commit()
         local_db.close()
-        self.metrics.add_ports([port, ])
+        self.metrics.add_ports([{"port": port, "name": cname}])
         return is_new_user
 
     def del_user_usage(self, certname):
@@ -190,7 +190,7 @@ class Shadow(Service):
         self.shadow_conf_file_save(
             server['server_port'], server['password'])
         self.logger.debug(cmd + ' >> ' + str(self.sock.recv(1056)))
-        self.metrics.add_ports([server['server_port'], ])
+        self.metrics.add_ports([{"port": server['server_port'], "name": server['certname']}])
 
     def start_all(self):
         # used at boot time

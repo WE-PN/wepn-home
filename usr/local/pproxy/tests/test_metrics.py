@@ -17,7 +17,7 @@ client = MetricsClient(SERVER_HOST, METRICS_PORT)
 try:
     # 1. Add some ports to monitor
     print("\n--- Adding ports 80, 443, 22 ---")
-    add_response = client.add_ports([80, 443, 22])
+    add_response = client.add_ports([{"port":80, "name":"http"}, {"port":443, "name":"https"}, {"port":22,"name":"ssh"}])
     print(f"Server response: {add_response.get('message')}")
 
     # 2. List currently monitored ports
