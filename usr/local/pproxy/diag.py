@@ -147,8 +147,10 @@ class WPDiag:
         except Exception as err:
             logs = {'error': str(err)[:35]}
         headers = {"Content-Type": "application/json"}
+        external_ip = str(ipw.myip())
         data = {
             "serial_number": self.config.get('django', 'serial_number'),
+            "wan_ip": external_ip,
             "device_key": self.config.get('django', 'device_key'),
             "input": {"port": str(port), "experiment_name": "port_test",
                       "debug": [{"igds": str(self.device.igd_names)},
