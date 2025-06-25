@@ -5,8 +5,6 @@ import socket
 
 from constants import LOG_CONFIG
 from constants import METRICS_PORT
-logging.config.fileConfig(LOG_CONFIG,
-                          disable_existing_loggers=False)
 
 
 class MetricsClient:
@@ -40,6 +38,8 @@ class MetricsClient:
         if logger is not None:
             self.logger = logger
         else:
+            logging.config.fileConfig(LOG_CONFIG,
+                                      disable_existing_loggers=False)
             self.logger = logging.getLogger("metrics_client")
 
     def _send_command(self, command_dict: dict) -> dict:
