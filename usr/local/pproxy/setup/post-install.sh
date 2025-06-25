@@ -74,6 +74,13 @@ chown pproxy:pproxy /var/local/pproxy/*
 chown pproxy:pproxy /var/local/pproxy/.*
 chown pproxy:pproxy /var/local/pproxy/shadow/*
 
+# allow API server to write to these
+for CONF in status.ini error.log
+do
+	chwon pproxy:shadow-runners /var/local/pproxy/$CONF
+	chmod g+w /var/local/pproxy/$CONF
+done
+
 echo -e "correcting scripts that run as sudo"
 for SCRIPT in ip-shadow restart-pproxy update-pproxy update-system wepn_git prevent_location_issue iptables-flush check-venv limit_bandwdith
 do
@@ -109,16 +116,18 @@ if ! test -f $REQUIREMENTS_FILE_PATH; then
 	REQUIREMENTS_FILE_PATH=$PPROXY_HOME/setup/requirements.txt
 fi
 
-pip install -r $REQUIREMENTS_FILE_PATH --cache-dir $PIP_CACHE
+# Disabling this for now
+# pip install -r $REQUIREMENTS_FILE_PATH --cache-dir $PIP_CACHE
 if [ ! $? -eq 0 ]; then
 	echo "Doing one-by-one pip install"
 	for pkg in `cat $REQUIREMENTS_FILE_PATH`
 	do
-		pip install $pkg
+		pip install $pkg --cache-dir $PIP_CACHE
 	done
 fi
 
-chown pproxy:pproxy $PIP_CACHE/* -R
+chown pproxy:shadow-runnes $PIP_CACHE/* -R
+chmod g+w $PIP_CACHE/* -R
 
 ##############################################################################
 # remove extra dependency that kills keypad. this is not a proper fix, just a
