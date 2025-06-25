@@ -77,7 +77,7 @@ chown pproxy:pproxy /var/local/pproxy/shadow/*
 # allow API server to write to these
 for CONF in status.ini error.log
 do
-	chwon pproxy:shadow-runners /var/local/pproxy/$CONF
+	chown pproxy:shadow-runners /var/local/pproxy/$CONF
 	chmod g+w /var/local/pproxy/$CONF
 done
 
