@@ -204,6 +204,8 @@ else:
         status.remove_option('software', 'uplink')
     if status.has_option('software', 'routing-mode'):
         status.remove_option('software', 'routing-mode')
+# June 2025: force all devices back to prod
+status.set('software', 'channel', "prod")
 
 # core networking info:
 #   how to route, where to route, etc.
