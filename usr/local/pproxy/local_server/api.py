@@ -200,7 +200,7 @@ def get_error_log():
     if int(is_claimed) == 1:
         if not valid_token(request.args.get('local_token')):
             return "Not accessible", http_status.HTTP_401_UNAUTHORIZED
-    device = Device()
+    device = Device(logger)
     contents = device.get_error_logs()
     return (contents)
 
