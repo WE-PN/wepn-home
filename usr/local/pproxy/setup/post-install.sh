@@ -109,7 +109,7 @@ mkdir -p $PIP_CACHE
 chown root $PIP_CACHE
 chown root $PIP_CACHE/* -R
 
-pip install --upgrade pip --cache-dir $PIP_CACHE
+pip install --upgrade pip packaging --cache-dir $PIP_CACHE
 
 REQUIREMENTS_FILE_PATH=$PPROXY_HOME/setup/requirements-$OS_VERSION.txt
 if ! test -f $REQUIREMENTS_FILE_PATH; then
@@ -118,7 +118,6 @@ fi
 
 # Disabling this for now
 # pip install -r $REQUIREMENTS_FILE_PATH --cache-dir $PIP_CACHE
-pip intall --cache-dire $PIP_CACHE packaging
 python lookup_pip.py $REQUIREMENTS_FILE_PATH missing_pip.txt
 if [ ! $? -eq 0 ]; then
 	# the lookup attempt failed, fall back
@@ -135,7 +134,7 @@ else
 	done
 fi
 
-chown pproxy:shadow-runnes $PIP_CACHE/* -R
+chown pproxy:shadow-runners $PIP_CACHE/* -R
 chmod g+w $PIP_CACHE/* -R
 
 ##############################################################################

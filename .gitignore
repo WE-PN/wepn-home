@@ -7,6 +7,7 @@ __pycache__/
 *.pyc
 *.crt
 *.key
+*.pub
 *.csr
 *.sig
 *.wav
@@ -41,6 +42,7 @@ local_test_config.ini
 
 usr/local/pproxy/setup/seeed-voicecard
 usr/local/pproxy/users
+usr/local/pproxy/setup/missing_pip.txt
 
 cloud.json
 goog.txt
