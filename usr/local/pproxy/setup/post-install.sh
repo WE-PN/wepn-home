@@ -118,7 +118,7 @@ fi
 
 # Disabling this for now
 # pip install -r $REQUIREMENTS_FILE_PATH --cache-dir $PIP_CACHE
-python lookup_pip.py $REQUIREMENTS_FILE_PATH missing_pip.txt
+python $PPROXY_HOME/setup/lookup_pip.py $REQUIREMENTS_FILE_PATH $PPROXY_HOME/setup/missing_pip.txt
 if [ ! $? -eq 0 ]; then
 	# the lookup attempt failed, fall back
 	echo "Doing one-by-one pip install"
@@ -128,7 +128,7 @@ if [ ! $? -eq 0 ]; then
 	done
 else
 	echo "Installing only missing packages"
-	for pkg in `cat missing_pip.txt`
+	for pkg in `cat $PPROXY_HOME/setup/missing_pip.txt`
 	do
 		pip install $pkg --cache-dir $PIP_CACHE
 	done
