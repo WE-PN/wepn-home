@@ -118,9 +118,18 @@ fi
 
 # Disabling this for now
 # pip install -r $REQUIREMENTS_FILE_PATH --cache-dir $PIP_CACHE
+pip intall --cache-dire $PIP_CACHE packaging
+python lookup_pip.py $REQUIREMENTS_FILE_PATH missing_pip.txt
 if [ ! $? -eq 0 ]; then
+	# the lookup attempt failed, fall back
 	echo "Doing one-by-one pip install"
 	for pkg in `cat $REQUIREMENTS_FILE_PATH`
+	do
+		pip install $pkg --cache-dir $PIP_CACHE
+	done
+else
+	echo "Installing only missing packages"
+	for pkg in `cat missing_pip.txt`
 	do
 		pip install $pkg --cache-dir $PIP_CACHE
 	done
