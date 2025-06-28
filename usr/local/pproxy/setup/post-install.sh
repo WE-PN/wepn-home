@@ -282,19 +282,39 @@ echo -e "These are ONLY used for local network communications."
 echo -e "Local API server will disable itself if it detects port exposure to external IP."
 echo -e "See: https://go.we-pn.com/waiver-3"
 cd $PPROXY_HOME/local_server/
-openssl genrsa -out wepn-local.key 2048
-openssl req -new -key wepn-local.key -out wepn-local.csr -subj "/C=US/ST=California/L=California/O=WEPN/OU=Local WEPN Device/CN=invalid.com"
-openssl x509 -req -days 365 -in wepn-local.csr -signkey wepn-local.key -out wepn-local.crt
-openssl x509 -in wepn-local.crt -pubkey -noout \
-   | openssl asn1parse -inform PEM -in - -noout -out - \
-   | openssl dgst -sha256 -binary - \
-   | openssl base64 > wepn-local.sig
+MAIN_CERT_FILE="wepn-local.crt"
 
-chown wepn-api wepn-local.*
-chgrp wepn-web wepn-local.*
-chgrp wepn-web .
-chmod g+r wepn-local.*
-chmod g+r .
+NEED_NEW_CERT=0
+# if file does not exist, then need to generate
+if [ -f $MAIN_CERT_FILE ];
+then
+	# if file exists, but expires in 4 months, then need to generate a new one
+	openssl x509 -enddate -noout -in $MAIN_CERT_FILE -checkend 10520000
+	if [ ! $? -eq 0 ];
+	then
+		NEED_NEW_CERT=1
+	fi
+else
+	NEED_NEW_CERT=1
+fi
+if [ $NEED_NEW_CERT -eq 1 ];
+then
+	openssl genrsa -out wepn-local.key 2048
+	openssl req -new -key wepn-local.key -out wepn-local.csr -subj "/C=US/ST=California/L=California/O=WEPN/OU=Local WEPN Device/CN=invalid.com"
+	openssl x509 -req -days 365 -in wepn-local.csr -signkey wepn-local.key -out wepn-local.crt
+	openssl x509 -in wepn-local.crt -pubkey -noout \
+	   | openssl asn1parse -inform PEM -in - -noout -out - \
+	   | openssl dgst -sha256 -binary - \
+	   | openssl base64 > wepn-local.sig
+
+	chown wepn-api wepn-local.*
+	chgrp wepn-web wepn-local.*
+	chgrp wepn-web .
+	chmod g+r wepn-local.*
+	chmod g+r .
+else
+	echo "No need to generate new certificate for API server"
+fi
 
 systemctl daemon-reload
 systemctl enable wepn-api
