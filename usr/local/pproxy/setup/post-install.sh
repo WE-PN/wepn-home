@@ -82,7 +82,7 @@ do
 done
 
 echo -e "correcting scripts that run as sudo"
-for SCRIPT in ip-shadow restart-pproxy update-pproxy update-system wepn_git prevent_location_issue iptables-flush check-venv limit_bandwdith
+for SCRIPT in ip-shadow restart-pproxy update-pproxy update-system wepn_git prevent_location_issue iptables-flush check-venv limit_bandwdith permissions
 do
 	chown root:root /usr/local/sbin/$SCRIPT.sh
 	chmod 755 /usr/local/sbin/$SCRIPT.sh
@@ -307,14 +307,14 @@ then
 	   | openssl dgst -sha256 -binary - \
 	   | openssl base64 > wepn-local.sig
 
+	chown wepn-api wepn-local.*
+	chgrp wepn-web wepn-local.*
+	chgrp wepn-web .
+	chmod 660  wepn-local.*
+	chmod 660 .
 else
 	echo "No need to generate new certificate for API server"
 fi
-chown wepn-api wepn-local.*
-chgrp wepn-web wepn-local.*
-chgrp wepn-web .
-chmod 660  wepn-local.*
-chmod 660 .
 
 systemctl daemon-reload
 systemctl enable wepn-api
@@ -404,8 +404,6 @@ chmod 0655 /etc/modprobe.d/snd-bcm2835.conf
 /usr/bin/chown root:root /etc/modprobe.d/snd-bcm2835.conf
 /usr/bin/chown root:root /etc/logrotate.conf
 
-
-
 ##############################################################################
 # Compile and intall the setuid program
 # so we don't need sudo
@@ -473,8 +471,8 @@ chown pproxy:pproxy $FLG
 if [ $OS_VERSION == "bullseye" ]; then
 	/bin/bash /usr/local/pproxy/setup/freeze_kernel.sh
 fi
-
-
+# Fix the permissions
+/bin/bash /usr/local/sbin/permissions.sh
 ##############################################################################
 echo -e "Installation of WEPN complete."
 echo -e "Restart WEPN services manually if you are reading this."
