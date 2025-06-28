@@ -96,16 +96,10 @@ class Shadow(Service):
             # to update the app manually if needed
             password = server['password']
 
-        cmd = 'add : {"server_port": ' + \
-            str(port) + ' , "password" : "' + str(password) + '" } '
-        self.shadow_conf_file_save(port, password)
-        self.sock.send(str.encode(cmd))
-        self.shadow_conf_file_save(port, password)
-        self.logger.debug("socket return: " + str(self.sock.recv(1056)))
-        # open the port for this now
-        self.logger.info('enabling port forwarding to port ' + str(port))
-        device = Device(self.logger)
-        device.open_port(port, 'ShadowSocks ' + cname)
+        new_server = {"server_port": port,
+                      "password": password,
+                      "certname": cname}
+        self.start_server(new_server)
 
         # add certname, port, password to a json list to use at delete/boot
         servers.upsert({'certname': cname, 'server_port': port, 'password': password, 'language': lang},
