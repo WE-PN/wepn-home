@@ -545,10 +545,13 @@ class Device():
 
     def get_repo_package_version(self):
         self.repo_pkg_version = None
-        try:
-            dist = distro.codename()
-        except:
-            dist = "bookworm"
+        if self.get_ota_channel == "beta":
+            dist = "testing"
+        else:
+            try:
+                dist = distro.codename()
+            except:
+                dist = "bookworm"
         try:
             if platform.architecture()[0] == "64bit":
                 arch = "arm64"

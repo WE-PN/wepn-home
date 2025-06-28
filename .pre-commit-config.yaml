@@ -22,7 +22,7 @@ repos:
     -   id: python-safety-dependencies-check
 
 -   repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v3.2.0
+    rev: v5.0.0
     hooks:
 #    -   id: detect-aws-credentials
     -   id: check-added-large-files
