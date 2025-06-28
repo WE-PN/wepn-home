@@ -307,14 +307,14 @@ then
 	   | openssl dgst -sha256 -binary - \
 	   | openssl base64 > wepn-local.sig
 
-	chown wepn-api wepn-local.*
-	chgrp wepn-web wepn-local.*
-	chgrp wepn-web .
-	chmod g+r wepn-local.*
-	chmod g+r .
 else
 	echo "No need to generate new certificate for API server"
 fi
+chown wepn-api wepn-local.*
+chgrp wepn-web wepn-local.*
+chgrp wepn-web .
+chmod 660  wepn-local.*
+chmod 660 .
 
 systemctl daemon-reload
 systemctl enable wepn-api
