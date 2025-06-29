@@ -16,6 +16,7 @@ __pycache__/
 .bash_history
 .viminfo
 .vim/
+.ssh/
 .swp
 .shadowsocks
 .cache
@@ -26,6 +27,7 @@ __pycache__/
 .ssh
 .dotnet
 .vscode-server
+.bashrc
 
 
 .config
