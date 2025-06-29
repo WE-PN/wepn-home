@@ -706,10 +706,14 @@ class KEYPAD:
 
         # if no claim is set, then try the USB methods
         # this is what happens in assembly line during provisioning
+        self.menu[6][0]["text"] = "Generating ..."
+        self.render()
         fetched = False
         generated = self.device.generate_new_config()
         info_str = "Please reboot ..."
         if not generated:
+            self.menu[6][0]["text"] = "Fetching ..."
+            self.render()
             fetched = self.device.fetch_config_from_backend()
             info_str = "Rebooting ..."
         if generated or fetched:
@@ -726,6 +730,9 @@ class KEYPAD:
             # Fetching is used mainly for remote customers,
             # so we reboot automatically.
             self.device.reboot()
+        else:
+            self.menu[6][0]["text"] = "Generate"
+            self.render()
 
     def update_ssh_remote_status(self):
         ssh_running = self.device.is_ssh_service_running()
