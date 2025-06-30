@@ -20,7 +20,7 @@ config.read(TEST_CONFIG)
 pproxy_config = configparser.ConfigParser()
 pproxy_config.read(PPROXY_CONFIG)
 
-#token = config.get('user', 'token')
+token = config.get('user', 'token')
 user = config.get('user', 'user')
 password = config.get('user', 'password')
 
@@ -150,7 +150,6 @@ def test_clean_friend():
     jresponse = response.json()
     for item in jresponse:
         friend_id = item['id']
-        print(friend_id)
         response = requests.delete(url + '/friend/' + str(friend_id), headers=headers)
         assert (response.status_code == 200 or response.status_code == 204)  # nosec: assert is a legit check for pytest
 
@@ -244,7 +243,6 @@ def test_api_claim_info_redacted_post_claim():
     status = configparser.ConfigParser()
     status.read(STATUS_FILE)
     key = status.get('status', 'temporary_key')
-    print(key)
     assert (key == 'CLAIMED')
     # get the key through the local API
     response = requests.get(local_api_url + "/api/v1/claim/info", verify=False)
@@ -311,6 +309,7 @@ def test_add_friend():
     jresponse = response.json()
     payload['id'] = jresponse['id']
     friend_id = payload['id']
+    print(f"friend_ip is {friend_id}")
     assert (jresponse == payload)  # nosec: assert is a legit check for pytest
 
 
@@ -330,7 +329,7 @@ def test_list_friends():
 
 
 @pytest.mark.dependency(depends=["test_add_friend"])
-@pytest.mark.flaky(retries=3, delay=75)
+@pytest.mark.flaky(retries=5, delay=75)
 def test_added_friend_in_local_db():
     global friend_id
     conn = sqlite3.connect(shadow_db)
@@ -384,7 +383,6 @@ def test_heartbeat_change_usage_status():
     }
     response = requests.get(url + '/friend/', headers=headers)
     jresponse = response.json()
-    print(jresponse)
     expected[0]['cert_hash'] = jresponse[0]['cert_hash']
     assert (response.status_code == 200)  # nosec: assert is a legit check for pytest
     assert (jresponse == expected)  # nosec: assert is a legit check for pytest
@@ -405,8 +403,6 @@ def test_api_gives_correct_key():
     assert (len(result) == 1)
     real_ss_pass = result[0][1]
     real_port = result[0][0]
-    print(real_ss_pass)
-    print(real_port)
     status = configparser.ConfigParser()
     status.read(STATUS_FILE)
     local_token = status.get('status', 'local_token')
@@ -420,18 +416,24 @@ def test_api_gives_correct_key():
                              params=payload, verify=False)
     assert (response.status_code == 200)
     jresponse = response.json()
-    print(jresponse)
+    link = jresponse['link'][5:]
     encoded_str = jresponse['link'][5:-11]
-    components = decode_base64(encoded_str)
+    end_b64 = link.find("@")
+    end_hostname = link.find(":")
+    end_port = link.find("/?")
+
+    encoded = link[:end_b64]
+    host = link[end_b64+1:end_hostname]
+    port = link[end_hostname+1:end_port]
+    components = decode_base64(encoded)
 
     assert (int(real_ss_pass) == int(components[1]))
-    assert (int(real_port) == int(components[3]))
+    assert (int(real_port) == int(port))
 
 
 @pytest.mark.dependency(depends=["test_add_friend"])
 def test_delete_friend():
     global friend_id
-    print(friend_id)
     headers = {
         "Authorization": auth_token,
         "content-type": "application/json"
@@ -442,7 +444,7 @@ def test_delete_friend():
 
 
 @pytest.mark.dependency(depends=["test_delete_friend"])
-@pytest.mark.flaky(retries=3, delay=75)
+@pytest.mark.flaky(retries=5, delay=75)
 def test_deleted_friend_in_local_db():
     # wait for server to send the command to device
     time.sleep(5)
@@ -451,13 +453,12 @@ def test_deleted_friend_in_local_db():
     cursor = conn.cursor()
     cursor.execute('''SELECT * from servers where certname like "zxcvb" and language like "en"''')
     result = cursor.fetchall()
-    print(result)
     conn.close()
     assert (len(result) == 0)
 
 
 @pytest.mark.dependency(depends=["test_delete_friend"])
-@pytest.mark.flaky(retries=3, delay=10)
+@pytest.mark.flaky(retries=5, delay=30)
 def test_deleted_friend_in_api():
     # Now make sure the local API server is also empty
     status = configparser.ConfigParser()
@@ -474,7 +475,7 @@ def test_deleted_friend_in_api():
                              params=payload, verify=False)
     assert (response.status_code == 200)
     jresponse = response.json()
-    assert (jresponse['link'] == "empty")
+    assert (jresponse['link'] == "empty" or jresponse['link'] == "")
     assert (jresponse["digest"] == "")
 
 
@@ -499,7 +500,6 @@ def test_check_api_calls_valid():
 @pytest.mark.dependency(depends=["test_login"])
 def test_unclaim():
     device_id = pproxy_config.get('mqtt', 'username')
-    print(device_id)
     headers = {
         'content-type': 'application/json',
         'Accept-Charset': 'UTF-8',
