@@ -15,6 +15,7 @@ DEFAULT_UPNP_TIMEOUT = 86400
 ERROR_LOG_FILE = "/var/local/pproxy/error.log"
 FORCE_SCREEN_ON = False
 HEALTHY_DIAG_CODE = 127
+HEARTBEATS_TO_WARM = 96
 LOG_CONFIG = "/etc/pproxy/logging.ini"
 METRICS_PORT = 8411
 SERVICE_FILE_BASE = "/var/local/pproxy/"

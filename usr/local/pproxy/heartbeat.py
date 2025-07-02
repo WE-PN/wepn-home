@@ -12,6 +12,8 @@ from services import Services
 from shadow import Shadow
 from wstatus import WStatus
 from metrics_client import MetricsClient
+from constants import HEARTBEATS_TO_WARM
+from constants import HEALTHY_DIAG_CODE
 
 ipw = IPW()
 
@@ -135,10 +137,11 @@ class HeartBeat:
         # status 3 Service: Stopped RPI: Restarting
         # status 4 Service: Warming RPI: Up
         hb_left = int(self.status.get("hb_to_warm"))
-        if hb_left > 0:
+        if hb_left > 0 and diag_code != HEALTHY_DIAG_CODE:
             # if device is still warming after cold boot or OOBE,
             # indicate that the app. otherwise, app will show
             # "error" warnings with incomplete data.
+            # if we land in HEALTHY state earlier, exit warming faster
             status = 4
         else:
             status = int(self.status.get('state'))
@@ -209,8 +212,8 @@ class HeartBeat:
     def record_hb_send(self):
         left = self.status.get("hb_to_warm")
         if left == "":
-            self.status.set("hb_to_warm", 3)
-            left = 3
+            self.status.set("hb_to_warm", HEARTBEATS_TO_WARM)
+            left = HEARTBEATS_TO_WARM
         left = int(left)
         if left > 0:
             self.status.set("hb_to_warm", str(left - 1))

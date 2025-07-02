@@ -17,6 +17,7 @@ except ImportError:
     import configparser
 
 from constants import LOG_CONFIG
+from constants import HEARTBEATS_TO_WARM
 
 CONFIG_FILE = '/etc/pproxy/config.ini'
 CONFIG_FILE_BACKUP = '/var/local/pproxy/config.bak'
@@ -68,7 +69,7 @@ status = configparser.ConfigParser()
 
 status.read(STATUS_FILE)
 status['status']['booting'] = '1'
-status['status']['hb_to_warm'] = '3'
+status['status']['hb_to_warm'] = str(HEARTBEATS_TO_WARM)
 with open(STATUS_FILE, 'w') as statusfile:
     status.write(statusfile)
 
