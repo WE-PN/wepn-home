@@ -77,6 +77,7 @@ if not status.has_section('status'):
     status.set('status', 'mqtt-reason', '0')
     status.set('status', 'local_token', '0')
     status.set('status', 'temporary_key', '0')
+    status.set('status', 'last_heartbeat_timestamp', '1')
 else:
     if not status.has_option('status', 'last_heartbeat_timestamp'):
         status.set('status', 'last_heartbeat_timestamp', '1')

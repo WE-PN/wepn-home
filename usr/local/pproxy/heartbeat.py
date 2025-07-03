@@ -164,8 +164,11 @@ class HeartBeat:
             usage_countries = self.metrics.get_report()
         except:
             usage_countries = {}
-        last_ts = self.status.status.getint("status", "last_heartbeat_timestamp")
         timestamp = int(round(datetime.now().timestamp()))
+        try:
+            last_ts = self.status.status.getint("status", "last_heartbeat_timestamp")
+        except:
+            last_ts = timestamp
         hb_time_delta = timestamp - last_ts
         data = {
             "time_detla": hb_time_delta,
