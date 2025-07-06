@@ -117,12 +117,17 @@ class HeartBeat:
         headers = {"Content-Type": "application/json"}
         external_ip = str(ipw.myip())
 
+        local_ip, sys_info = None, None
         try:
             device = Device(self.logger)
             local_ip = device.get_local_ip()
+            sys_info = device.get_system_health_stats(),
         except Exception as e:
             print(e)
-            local_ip = "127.0.0.1"
+            if local_ip is None:
+                local_ip = "127.0.0.1"
+            if sys_info is None:
+                sys_info = {}
         test_port = int(self.config.get('openvpn', 'port')) + 10
         if int(self.config.get('shadow', 'enabled')) == 1:
             shadow = Shadow(self.logger)
@@ -187,6 +192,7 @@ class HeartBeat:
             "usage_deltas": usage_deltas,
             "usage_countries": usage_countries,
             "public_key": signature,
+            "sys_info": sys_info,
             "log": logs,
         }
         self.status.set('pin', str(self.pin))

@@ -15,6 +15,7 @@ logging.config.fileConfig(LOG_CONFIG,
 
 logger = logging.getLogger("device")
 device = Device(logger)
+print(device.get_system_health_stats())
 device.find_igds()
 print(device.get_default_gw_mac())
 print(device.get_default_gw_ip())

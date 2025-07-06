@@ -17,6 +17,7 @@ import random
 import re
 import requests
 import shlex
+import shutil
 import subprocess  # nosec shlex split used for sanitization go.we-pn.com/waiver-1
 import sys
 import time
@@ -999,3 +1000,36 @@ class Device():
             print("Not enough logs, returning what was there" + str(err))
             pass
         return contents
+
+    def get_system_health_stats(self):
+        try:
+            dist = distro.codename()
+        except:
+            dist = "unknown"
+        try:
+            if platform.architecture()[0] == "64bit":
+                arch = "arm64"
+            else:
+                arch = "armhf"
+        except:
+            arch = "unknown"
+        try:
+            memory = psutil.virtual_memory()
+            mem = memory.available
+        except:
+            mem = 0
+        try:
+            disk_usage = shutil.disk_usage('/')
+            hd = disk_usage.total
+            hd_used = disk_usage.used
+        except Exception as e:
+            print(e)
+            hd = 0
+            hd_used = 0
+        sys_info = {
+            "os": str(dist + "-" + arch),
+            "mem": round(mem / (1024**3), 2),
+            "hd": round(hd / (1024**3), 2),  # Convert bytes to GB
+            "hd_used": round(hd_used / (1024**3), 2),
+        }
+        return sys_info
