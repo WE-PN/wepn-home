@@ -7,6 +7,8 @@ PKG=pproxy-rpi
 FLG="/var/local/pproxy/pending-set-service"
 LOG="/tmp/update-out"
 
+chown root:root $LOG
+
 date > /var/local/pproxy/last-update 2>&1
 date > $LOG 2>&1
 
