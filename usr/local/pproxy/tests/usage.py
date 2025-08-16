@@ -53,7 +53,8 @@ def print_all():
             cmd = 'list : {"server_port": '+str(server['server_port'])+', '+str(server['password'])+', "certname": '+ str(server['certname'])+'}' 
             print(cmd)
 def print_all_usage():
-        local_db = dataset.connect('sqlite:////var/local/pproxy/usage.db')
+        last = {}
+        local_db = dataset.connect('sqlite:////var/local/pproxy/shadow.db')
         servers = local_db['servers']
         if not servers:
             print('no servers')
@@ -64,7 +65,18 @@ def print_all_usage():
             print(line)
         print("||------------------------daily usage-------------------------------||")
         for server in local_db['daily']:
-            print(server)
+            c = server['certname']
+            u = server['end_usage']
+            d = server['date']
+
+            if c in last:
+                if u >= last[c]:
+                    u = server['end_usage'] - last[c]
+                last[c] = server['end_usage']
+            else:
+                last[c] = server['end_usage']
+            print(f"{c}, {d}, {round(u/(1024*1024*8),2)}, {server['end_usage']}")
+            #print(server)
         print("||------------------------------------------------------------------||")
 
 # add_user('abcd','1.1.1.1','kjasas../.../da',999)
