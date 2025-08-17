@@ -14,6 +14,7 @@ from wstatus import WStatus
 from metrics_client import MetricsClient
 from constants import HEARTBEATS_TO_WARM
 from constants import HEALTHY_DIAG_CODE
+from constants import METRICS_REPORT_INTERVAL_SECONDS
 
 ipw = IPW()
 
@@ -48,6 +49,10 @@ class HeartBeat:
         # Print these to screen for bring-your-own device users without a screen
         self.logger.debug("PIN=" + str(self.pin))
         self.logger.debug("Local token=" + str(self.local_token))
+        self.save_status_immediately = True
+
+    def buffer_status_saves(self, value):
+        self.save_status_immediately = not value
 
     def is_connected(self):
         if self.diag:
@@ -165,10 +170,6 @@ class HeartBeat:
             logs = {"ports": ports, 'num_port_fwds': num_forwards}
         except:
             logs = "{'error':'Could not get port mappings'}"
-        try:
-            usage_countries = self.metrics.get_report()
-        except:
-            usage_countries = {}
         timestamp = int(round(datetime.now().timestamp()))
         try:
             last_ts = self.status.status.getint("status", "last_heartbeat_timestamp")
@@ -189,19 +190,10 @@ class HeartBeat:
             "diag_code": diag_code,
             "access_cred": access_creds,
             "usage_status": usage_status,
-            "usage_deltas": usage_deltas,
-            "usage_countries": usage_countries,
             "public_key": signature,
             "sys_info": sys_info,
             "log": logs,
         }
-        self.status.set('pin', str(self.pin))
-        prev_token = self.status.get('local_token')
-        self.status.set('prev_token', str(prev_token))
-        self.status.set('local_token', str(self.local_token))
-        self.status.set('last_diag_code', str(diag_code))
-        self.status.set('last_heartbeat_timestamp', str(timestamp))
-        self.status.save()
 
         data_json = json.dumps(data)
         self.logger.debug("HB data to send: " + data_json)
@@ -217,8 +209,83 @@ class HeartBeat:
             lcd.set_lcd_present(self.config.get('hw', 'lcd'))
             display_str = self.get_display_string_status(status, diag_code, lcd)
             lcd.display(display_str, 20)
+        self.status.set('pin', str(self.pin))
+        prev_token = self.status.get('local_token')
+        self.status.set('prev_token', str(prev_token))
+        self.status.set('local_token', str(self.local_token))
+        self.status.set('last_diag_code', str(diag_code))
+        self.status.set('last_heartbeat_timestamp', str(timestamp))
+        if self.save_status_immediately:
+            self.status.save()
 
-    def record_hb_send(self):
+    # send measurement metrics to backend
+    def send_measurements(self):
+        timestamp = int(round(datetime.now().timestamp()))
+        if not self.status.status.has_option("status", "last_measurement_send_timestamp"):
+            self.logger.debug("no timestamp for the start of measurement, just save ts now")
+            self.status.set('last_measurement_send_timestamp', str(timestamp))
+            if self.save_status_immediately:
+                self.status.save()
+            # there was no timestamp for last report, so server will reject anyways
+            return
+
+        try:
+            last_ts = self.status.status.getint("status", "last_measurement_send_timestamp")
+        except:
+            last_ts = timestamp
+        hb_time_delta = timestamp - last_ts
+        if hb_time_delta < METRICS_REPORT_INTERVAL_SECONDS:
+            self.logger.debug(f"not the minimum time has passed({hb_time_delta}), no report needed")
+            return
+        headers = {
+            'content-type': 'application/json',
+            'Accept-Charset': 'UTF-8'
+        }
+        usage_status, usage_deltas = self.services.get_usage_status_summary()
+        self.logger.debug(usage_status)
+        try:
+            usage_countries = self.metrics.get_report()
+        except:
+            usage_countries = {}
+        data = {
+            "time_delta": hb_time_delta,
+            "timestamp": timestamp,
+            "serial_number": self.config.get('django', 'serial_number'),
+            "device_key": self.config.get('django', 'device_key'),
+            "software_version": self.status.get('sw'),
+            "usage_deltas": usage_deltas,
+            "usage_countries": usage_countries,
+        }
+
+        data_json = json.dumps(data)
+        self.logger.debug("Metrics data to send: " + data_json)
+        url = f"{self.config.get('django', 'url')}/api/device/{self.config.get('django', 'id')}/usage/"
+        try:
+            response = requests.post(url, data=data_json, headers=headers, timeout=10)
+            self.logger.debug("Response to Metrics" + str(response.status_code))
+        except requests.exceptions.RequestException as exception_error:
+            self.logger.error(
+                "Error in sending metrics: \r\n\t" + str(exception_error))
+        self.status.set('last_measurement_send_timestamp', str(timestamp))
+        if self.save_status_immediately:
+            self.status.save()
+
+    # wrapper to send both heartbeats and measurements with shared status file
+    # mostly to prevent overwriting the status file
+    def send_measurement_and_heartbeat(self):
+        try:
+            self.send_measurements()
+        except:
+            self.logger.exception("problem in sending measurements report")
+        try:
+            self.send_heartbeat()
+        except:
+            self.logger.exception("problem in sending heartbeat")
+            # try to save the status file, in case it was not saved
+            self.status.save()
+
+    # this function will ignore the buffer flag save_status_immediately
+    def record_hb_send(self, prevent_status_save=False):
         left = self.status.get("hb_to_warm")
         if left == "":
             self.status.set("hb_to_warm", HEARTBEATS_TO_WARM)
@@ -227,4 +294,5 @@ class HeartBeat:
         if left > 0:
             self.status.set("hb_to_warm", str(left - 1))
         self.logger.debug("HB left = " + str(left))
-        self.status.save()
+        if not prevent_status_save:
+            self.status.save()
