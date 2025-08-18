@@ -1,4 +1,8 @@
 #!/bin/bash
+#
+
+
+MARK=0x30
 
 current_user=`whoami`
 if [[ $current_user != "root" ]]; then
@@ -12,7 +16,7 @@ get_conf_value() {
 	V=`cat $file  | grep $filter |tr -d ' ' | awk -F"=" '{print \$2}'`
 	ret=${V:=$default}
 }
-do_iptables() {
+do_geo_iptables() {
 	ip=$1
 	if [ -z "$ip" ]; then
 		exit
@@ -27,10 +31,25 @@ do_iptables() {
 		fi
 	done
 }
+
+forward_all_traffic() {
+	website="we-pn.com"
+	ip_address=$(host -t A "$website" | awk '/has address/ {print $4}')
+	iptables -t mangle -A POSTROUTING -o wg0 -j MARK --set-xmark $MARK
+	for proto in tcp udp; do
+		for dport in "80" "443"; do
+			iptables -t mangle -A OUTPUT ! -o lo ! -d $ip_address -p $proto -m owner --uid-owner $USER --dport $dport -m $proto -j MARK --set-mark $MARK
+			ip6tables -t mangle -A OUTPUT ! -o lo ! -d $ip_address -p $proto -m owner --uid-owner $USER --dport $dport -m $proto -j MARK --set-mark $MARK
+		done
+		iptables -t nat -A OUTPUT -p $proto -m mark --mark 10 -j REDIRECT --to-ports 8999
+	done
+}
+
 w="warp-cli --accept-tos"
 pproxy_config_file="/etc/pproxy/config.ini"
 pproxy_status_file="/var/local/pproxy/status.ini"
 pproxy_networking_file="/var/local/pproxy/networking.ini"
+
 
 get_conf_value "uplink" "tor" $pproxy_networking_file
 UPLINK=$ret
@@ -94,6 +113,8 @@ esac
 # clear past rules in NAT
 iptables -t nat -F
 ip6tables -t nat -F
+sudo iptables -t mangle -F PREROUTING
+sudo iptables -t mangle -F OUTPUT
 
 case $UPLINK_MODE in
 	"geo")
@@ -115,24 +136,24 @@ case $UPLINK_MODE in
 		# TODO: exteremly unlikely, but to be safe need to sanitize the incoming text files too
 
 		for ip in `cat goog.txt | grep -v 8\.8\.`; do
-			do_iptables $ip
+			do_geo_iptables $ip
 		done
 
 		echo "doing cloud now"
 
 		# cloud ones
 		jq -c ".${str}" cloud.json | while read ip; do
-			do_iptables $ip
+			do_geo_iptables $ip
 		done
 
 		jq ".prefixes[].ipv4Prefix" cloud.json  -c --raw-output | grep -v null | while read ip; do
-			do_iptables $ip
+			do_geo_iptables $ip
 		done
 
 
 
 		jq ".prefixes[].ipv6Prefix" cloud.json  -c --raw-output | grep -v null | while read ip; do
-			do_iptables $ip
+			do_geo_iptables $ip
 		done
 		;;
 	"none")
@@ -143,21 +164,11 @@ case $UPLINK_MODE in
 		# this is helpful for when someone is just using their IP as entry point,
 		# but exits are through Tor/WARP
 		echo "All traffic needs to route through $UPLINK"
-		for proto in tcp udp; do
-			for dport in "80" "443"; do
-				iptables -t nat -A OUTPUT ! -o lo -p $proto -m owner --uid-owner $USER --dport $dport -m $proto -j REDIRECT --to-ports $DEST_PORT
-				ip6tables -t nat -A OUTPUT ! -o lo -p $proto -m owner --uid-owner $USER --dport $dport -m $proto -j REDIRECT --to-ports $DEST_PORT
-			done
-		done
+		forward_all_traffic
 		;;
 	*)
 		echo "Uplink mode unrecognized, will default to routing all traffic to be safe"
 		echo "All traffic needs to route through $UPLINK"
-		for proto in tcp udp; do
-			for dport in "80" "443"; do
-				iptables -t nat -A OUTPUT ! -o lo -p $proto -m owner --uid-owner $USER --dport $dport -m $proto -j REDIRECT --to-ports $DEST_PORT
-				ip6tables -t nat -A OUTPUT ! -o lo -p $proto -m owner --uid-owner $USER --dport $dport -m $proto -j REDIRECT --to-ports $DEST_PORT
-			done
-		done
-		;&
+		forward_all_traffic
+		;;
 esac
