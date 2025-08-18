@@ -119,6 +119,7 @@ class HeartBeat:
 
     # send heartbeat. if lcd_print==1, update LCD
     def send_heartbeat(self, lcd_print=0):
+        buffered_measurement_timestamp = self.status.status.getint("status", "last_measurement_send_timestamp")
         headers = {"Content-Type": "application/json"}
         external_ip = str(ipw.myip())
 
@@ -140,6 +141,7 @@ class HeartBeat:
         # this line can update the status file contents
         diag_code = self.diag.get_error_code(test_port)
         self.status.reload()
+        self.status.set('last_measurement_send_timestamp', str(buffered_measurement_timestamp))
 
         # status 0 Service: Stopped RPI: Off
         # status 1 Service: Stopped RPI: Up
@@ -267,6 +269,7 @@ class HeartBeat:
             self.logger.error(
                 "Error in sending metrics: \r\n\t" + str(exception_error))
         self.status.set('last_measurement_send_timestamp', str(timestamp))
+
         if self.save_status_immediately:
             self.status.save()
 
