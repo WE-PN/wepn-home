@@ -119,7 +119,10 @@ class HeartBeat:
 
     # send heartbeat. if lcd_print==1, update LCD
     def send_heartbeat(self, lcd_print=0):
-        buffered_measurement_timestamp = self.status.status.getint("status", "last_measurement_send_timestamp")
+        try:
+            buffered_measurement_timestamp = self.status.status.getint("status", "last_measurement_send_timestamp")
+        except:
+            buffered_measurement_timestamp = 0
         headers = {"Content-Type": "application/json"}
         external_ip = str(ipw.myip())
 

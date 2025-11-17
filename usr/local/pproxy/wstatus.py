@@ -81,7 +81,8 @@ class WStatus:
                 return ret
         except:
             self.logger.exception("Unknown section/field: "
-                                  + section + ":" + field)
+                                  + section + ":" + field +
+                                  " in " + self.source_file)
             return ""
 
     def set_service_status(self, service_name, is_enabled):

@@ -22,6 +22,11 @@ class Service:
         self.logger = logger
         return
 
+    def is_kindness_mode(self):
+        # this indicates if a person needs credentials to access  this service
+        # for example, Shadowsock is not "stranger mode" but Snowflake is.
+        return False
+
     def add_user(self, certname, ip_address, password, port, lang):
         return False
 

@@ -8,6 +8,7 @@ from openvpn import OpenVPN
 from shadow import Shadow
 from ssh import SSH
 from tor import Tor
+from unbounded import Unbounded
 from wifi import WiFi
 from wireguard import Wireguard
 from wstatus import WStatus
@@ -34,6 +35,7 @@ class Services:
         self.services.append({'name': 'tor', 'obj': Tor(logger)})
         self.services.append({'name': 'wifi', 'obj': WiFi(logger)})
         self.services.append({'name': 'wireguard', 'obj': Wireguard(logger)})
+        self.services.append({'name': 'unbounded', 'obj': Unbounded(logger)})
         self.logger = logger
         path = SERVICE_FILE_BASE + "/services.ini"
         self.service_config = WStatus(logger, source_file=path)
@@ -130,10 +132,10 @@ class Services:
     def get_service_creds_summary(self, ip_address):
         creds = {}
         for service in self.services:
-            res = service['obj'].get_service_creds_summary(ip_address)
-            self.logger.debug(res)
-            if bool(res):   # check if there are any friends
-                creds.update(res)
+            if not service['obj'].is_kindness_mode():
+                res = service['obj'].get_service_creds_summary(ip_address)
+                if bool(res):   # check if there are any friends
+                    creds.update(res)
         return creds
 
     def get_usage_status_summary(self):
