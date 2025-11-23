@@ -5,6 +5,7 @@ except ImportError:
     import configparser
 from constants import CONFIG_FILE
 from constants import SERVICE_FILE_BASE
+from device import Device
 from wstatus import WStatus
 
 # setuid command runner
@@ -20,6 +21,7 @@ class Service:
         path = SERVICE_FILE_BASE + "/" + name + ".ini"
         self.service_config = WStatus(logger, source_file=path)
         self.logger = logger
+        self.system_service_name = None
         return
 
     def is_kindness_mode(self):
@@ -115,6 +117,16 @@ class Service:
         pass
 
     def recover_missing_servers(self):
+        if self.system_service_name is None:
+            return
+        device = Device(self.logger)
+        is_running = device.is_service_active(self.system_service_name)
+        if self.is_enabled() and not is_running:
+            self.logger.debug(f"turning service {self.name} back on")
+            self.start_all()
+        if is_running and not self.is_enabled():
+            self.logger.debug(f"turning service {self.name} off")
+            self.stop_all()
         return
 
     def self_test(self):
@@ -145,17 +157,19 @@ class Service:
 
     def get_overlayable_config_value(self, field_name, default=None):
         value = None
+        target_type = type(default)
         try:
             overlay_value = None
             if self.config.has_option(
                     self.get_config_section_name(),
                     field_name):
-                value = self.config.get(self.get_config_section_name(),
-                                        field_name)
+                value = self.safe_convert(self.config.get(self.get_config_section_name(),
+                                                          field_name), target_type)
             if self.service_config.has_option(
                     self.name,
                     field_name):
-                overlay_value = self.service_config.get_field(self.name, field_name)
+                overlay_value = self.safe_convert(self.service_config.get_field(self.name, field_name),
+                                                  target_type)
             if overlay_value is not None and overlay_value != "":
                 value = overlay_value
         except:
@@ -163,6 +177,18 @@ class Service:
         if value is None:
             value = default
         return value
+
+    def safe_convert(self, val, target_type):
+        if isinstance(target_type, type(None)):
+            return val
+        try:
+            if target_type is bool:
+                return val.lower() == "true"
+            else:
+                return target_type(val)
+        except (ValueError, TypeError) as e:
+            self.logger.error(f"Conversion error: {e}")
+            return None
 
     def get_service_config_file(self):
         return SERVICE_FILE_BASE + "/" + self.name + ".ini"
