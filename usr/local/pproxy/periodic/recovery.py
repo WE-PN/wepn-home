@@ -5,8 +5,9 @@ import requests
 import sys
 up_dir = os.path.dirname(os.path.abspath(__file__)) + '/../'
 sys.path.append(up_dir)
-from shadow import Shadow  # nopep8
 from device import Device  # nopep8
+from shadow import Shadow  # nopep8
+from tor import Tor  # nopep8
 from unbounded import Unbounded  # nopep8
 
 
@@ -17,6 +18,7 @@ logging.config.fileConfig(LOG_CONFIG,
 logger = logging.getLogger("recovery")
 device = Device(logger)
 shadow_server = Shadow(logger)
+tor_server = Tor(logger)
 unbounded_server = Unbounded(logger)
 # each service should back up and restore their critical services
 # currently only shadowsocks has a crtical DB
@@ -26,6 +28,7 @@ shadow_server.backup_restore()
 # now recover missing servers
 shadow_server.recover_missing_servers()
 unbounded_server.recover_missing_servers()
+tor_server.recover_missing_servers()
 
 
 # if local API server is down, restart it

@@ -15,6 +15,7 @@ class Tor(Service):
     def __init__(self, logger):
         Service.__init__(self, "tor", logger)
         atexit.register(self.cleanup)
+        self.system_service_name = "tor.service"
 
     def cleanup(self):
         self.clear()
@@ -166,9 +167,6 @@ class Tor(Service):
             txt = "Access to Tor Bridge IP address " + ip_address + " is revoked.",
             html = "Access to Tor Bridge IP address " + ip_address + " is revoked.",
         return txt, html
-
-    def recover_missing_servers(self):
-        return
 
     def get_access_link(self, cname):
         link = None
