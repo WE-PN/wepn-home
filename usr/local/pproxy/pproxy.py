@@ -602,6 +602,13 @@ class PProxy():
         self.status.set('mqtt-reason', reason_code)
         self.status.save()
 
+    def fetch_config(self, services):
+        try:
+            new_config = self.device.get_device_config_backend()
+            services.configure(new_config["config"])
+        except:
+            self.logger.exception("cannot fetch config")
+
     def start(self):
         self.lcd = LCD()
         self.lcd.set_lcd_present(self.config.get('hw', 'lcd'))
@@ -612,6 +619,8 @@ class PProxy():
                                  wait=50,
                                  repetitions=100)
         services = Services(self.loggers['services'])
+        self.fetch_config(services)
+        time.sleep(1)
         services.start()
         time.sleep(5)
         client = mqtt.Client(self.config.get(
