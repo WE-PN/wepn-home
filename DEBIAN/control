@@ -1,5 +1,5 @@
 Package: pproxy-rpi
-Version: 1.19.15
+Version: 1.20.1
 Maintainer: WEPN Support <support@we-pn.com>
 Architecture: all 
 Description: Raspberry Pi python source for WEPN PProxy
