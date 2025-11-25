@@ -20,6 +20,7 @@ SRUN = "/usr/local/sbin/wepn-run"
 class Wireguard(Service):
     def __init__(self, logger):
         Service.__init__(self, "wireguard", logger)
+        self.system_server_name = "wg-quick@wg0"
         return
 
     def santizie_service_filename(self, filename):

@@ -179,7 +179,7 @@ class Service:
         return value
 
     def safe_convert(self, val, target_type):
-        if isinstance(target_type, type(None)):
+        if target_type == type(None):  # noqa I know more than you do, linter
             return val
         try:
             if target_type is bool:
@@ -188,7 +188,7 @@ class Service:
                 return target_type(val)
         except (ValueError, TypeError) as e:
             self.logger.error(f"Conversion error: {e}")
-            return None
+            return val
 
     def get_service_config_file(self):
         return SERVICE_FILE_BASE + "/" + self.name + ".ini"
