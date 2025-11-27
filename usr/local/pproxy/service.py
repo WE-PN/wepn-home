@@ -135,6 +135,12 @@ class Service:
     def backup_restore(self):
         return True
 
+    def is_currently_scheduled(self):
+        return True
+
+    def apply_time_limit(self):
+        pass
+
     def get_config_settings(self):
         settings_json = {
             "name": self.name,
@@ -145,11 +151,11 @@ class Service:
         return settings_json
 
     def configure(self, str_conf):
-        if isinstance(str_conf, str):
-            json_conf = json.loads(str_conf)
-        else:
-            json_conf = str_conf
         try:
+            if isinstance(str_conf, str):
+                json_conf = json.loads(str_conf)
+            else:
+                json_conf = str_conf
             self.set_enabled(json_conf["enabled"])
         except:
             self.logger.exception("error setting enabled")

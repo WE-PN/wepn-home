@@ -197,7 +197,7 @@ class Services:
         if self.service_config.has_option("server", "version"):
             return int(self.service_config.get_field("server", "version"))
         else:
-            return 0
+            return 1
 
     def configure(self, config_data):
         if isinstance(config_data, dict):

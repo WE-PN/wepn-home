@@ -40,24 +40,22 @@ class Unbounded(Service):
 
     def start_all(self):
         device = Device(self.logger)
+        # TODO: set hour limits
+        device.execute_setuid(f"1 23 set unbounded eth0 {self.get_limit()}")
         device.execute_setuid("0 6 1")
 
     def stop_all(self):
         device = Device(self.logger)
         device.execute_setuid("0 6 0")
+        # TODO: remove hour limits
+        device.execute_setuid(f"1 23 remove unbounded eth0 {self.get_limit()}")
 
     def start(self):
-        device = Device(self.logger)
         self.start_all()
-        # TODO: set hour limits
-        device.execute_setuid(f"1 23 set unbounded eth0 {self.get_limit()}")
         return
 
     def stop(self):
-        device = Device(self.logger)
         self.stop_all()
-        # TODO: remove hour limits
-        device.execute_setuid(f"1 23 remove unbounded eth0 {self.get_limit()}")
         return
 
     def restart(self):
