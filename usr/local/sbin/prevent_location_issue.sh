@@ -110,11 +110,16 @@ case $UPLINK in
 esac
 
 
-# clear past rules in NAT
-iptables -t nat -F
-ip6tables -t nat -F
-sudo iptables -t mangle -F PREROUTING
-sudo iptables -t mangle -F OUTPUT
+################################################################################
+## clear past rules in NAT
+## These are removed to avoid flushing the bandwidth shaping rules
+## This might leave some residue if IP addresses change. But unlikely to happen.
+##
+#iptables -t nat -F
+#ip6tables -t nat -F
+#sudo iptables -t mangle -F PREROUTING
+#sudo iptables -t mangle -F OUTPUT
+################################################################################
 
 case $UPLINK_MODE in
 	"geo")
