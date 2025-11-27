@@ -35,6 +35,7 @@ IPTABLES_MARK="1" # iptables mark value to identify user's traffic.
 TC_MAIN_PARENT_CLASSID="1:1"
 TC_USER_CLASS_SUFFIX="10" # User's class will be ${TC_MAIN_PARENT_CLASSID%:*}:${TC_USER_CLASS_SUFFIX} -> e.g. 1:10
 TC_DEFAULT_CLASSID="1:30" # For traffic not matching user's filter
+COMMENT_CMD=" -m comment --comment wepn-bw"
 
 # --- Helper Functions ---
 log_error() {
@@ -142,7 +143,7 @@ if [ "$ACTION" == "set" ]; then
 
     # --- Clean up previous rules for this specific user/mark first ---
     log_info "Cleaning up any potentially conflicting existing rules for this user/mark..."
-    sudo iptables -t mangle -D OUTPUT -m owner --uid-owner "$USER_UID" -o "$INTERFACE" -j MARK --set-mark "$IPTABLES_MARK" 2>/dev/null
+    sudo iptables -t mangle -D OUTPUT -m owner --uid-owner "$USER_UID" -o "$INTERFACE" -j MARK --set-mark "$IPTABLES_MARK" $COMMENT_CMD 2>/dev/null
 
     # TC cleanup is implicitly handled by qdisc del below, but filter/class for this specific mark could be removed if qdisc wasn't reset.
     # For this script's model (full qdisc reset), explicit tc rule removal here before reset is redundant.
@@ -168,7 +169,7 @@ if [ "$ACTION" == "set" ]; then
 
     # --- Setup iptables to mark user's packets ---
     log_info "Adding iptables rule to mark packets from UID $USER_UID with mark $IPTABLES_MARK on output interface $INTERFACE."
-    sudo iptables -t mangle -A OUTPUT -m owner --uid-owner "$USER_UID" -o "$INTERFACE" -j MARK --set-mark "$IPTABLES_MARK"
+    sudo iptables -t mangle -A OUTPUT -m owner --uid-owner "$USER_UID" -o "$INTERFACE" -j MARK --set-mark "$IPTABLES_MARK" $COMMENT_CMD
 
     log_info "--- Bandwidth Limit Applied ---"
     log_info "User: $USERNAME (UID: $USER_UID)"
@@ -189,7 +190,7 @@ elif [ "$ACTION" == "remove" ]; then
 
     # 1. Remove iptables rule
     log_info "Removing iptables rule for UID $USER_UID and mark $IPTABLES_MARK."
-    sudo iptables -t mangle -D OUTPUT -m owner --uid-owner "$USER_UID" -o "$INTERFACE" -j MARK --set-mark "$IPTABLES_MARK" 2>/dev/null
+    sudo iptables -t mangle -D OUTPUT -m owner --uid-owner "$USER_UID" -o "$INTERFACE" -j MARK --set-mark "$IPTABLES_MARK" $COMMENT_CMD 2>/dev/null
     if [ $? -ne 0 ]; then
         log_info "iptables rule might not have existed or was already removed."
     fi
