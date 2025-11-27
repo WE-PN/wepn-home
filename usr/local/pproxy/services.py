@@ -185,6 +185,13 @@ class Services:
             result &= service['obj'].self_test()
         return result
 
+    def backup_restore(self):
+        try:
+            for service in self.services:
+                service['obj'].backup_restore()
+        except Exception:
+            self.logger.exception("could not backup restore")
+
     def save_server_config_version(self, version):
         self.logger.debug("setting the server config" + str(version))
         if not self.service_config.has_section("server"):
@@ -208,12 +215,17 @@ class Services:
         for service_config in config_json["services"]:
             service_name = service_config["name"].lower()
             for service in self.services:
+                self.logger.debug(f"applying configuration to {service_name}")
                 if service['name'] == service_name:
                     service['obj'].configure(service_config["settings"])
         try:
             self.save_server_config_version(config_json["config_version"])
         except:
             self.logger.exception("could not save config version")
+
+    def apply_time_limit(self):
+        for service in self.services:
+            service['obj'].apply_time_limit()
 
     def get_config_string(self, version=None):
         if version is None:

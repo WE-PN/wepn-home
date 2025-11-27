@@ -6,9 +6,7 @@ import sys
 up_dir = os.path.dirname(os.path.abspath(__file__)) + '/../'
 sys.path.append(up_dir)
 from device import Device  # nopep8
-from shadow import Shadow  # nopep8
-from tor import Tor  # nopep8
-from unbounded import Unbounded  # nopep8
+from services import Services  # nopep8
 
 
 LOG_CONFIG = "/etc/pproxy/logging-debug.ini"
@@ -17,19 +15,14 @@ logging.config.fileConfig(LOG_CONFIG,
 
 logger = logging.getLogger("recovery")
 device = Device(logger)
-shadow_server = Shadow(logger)
-tor_server = Tor(logger)
-unbounded_server = Unbounded(logger)
-# each service should back up and restore their critical services
-# currently only shadowsocks has a crtical DB
-# TODO: replace with services.rercover_misisng_servers() and services.backup_restor()
-# might make sense to create an umbrella method like services.heal() which calls these
-shadow_server.backup_restore()
-# now recover missing servers
-shadow_server.recover_missing_servers()
-unbounded_server.recover_missing_servers()
-tor_server.recover_missing_servers()
 
+####
+# actions to apply to all services
+####
+services = Services(logger)
+services.backup_restore()
+services.recover_missing_servers()
+services.apply_time_limit()
 
 # if local API server is down, restart it
 url = "https://127.0.0.1:5000/"

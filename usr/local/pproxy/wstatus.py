@@ -19,14 +19,15 @@ class WStatus:
     def save(self):
         # TODO: add lock checking
         if self.source_file is not None and self.status is not None:
-            self.logger.info("writing status file")
+            self.logger.info(f"writing status file {self.source_file}")
             try:
                 statusfile = open(self.source_file, 'w')
                 self.status.write(statusfile)
                 statusfile.close()
             except Exception as err:
                 self.logger.debug(
-                    "Something happened when writing status file:" + str(err))
+                    "Something happened when writing status file:" + self.source_file
+                    + " error:" + str(err))
 
     def reload(self):
         self.status.read(self.source_file)

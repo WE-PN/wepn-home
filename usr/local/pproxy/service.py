@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 try:
     from configparser import configparser
 except ImportError:
@@ -22,6 +23,7 @@ class Service:
         self.service_config = WStatus(logger, source_file=path)
         self.logger = logger
         self.system_service_name = None
+        self.scheduled_times = {}
         return
 
     def is_kindness_mode(self):
@@ -116,15 +118,17 @@ class Service:
     def execute_cmd(self, cmd):
         pass
 
+    def is_running(self):
+        device = Device(self.logger)
+        return device.is_service_active(self.system_service_name)
+
     def recover_missing_servers(self):
         if self.system_service_name is None:
             return
-        device = Device(self.logger)
-        is_running = device.is_service_active(self.system_service_name)
-        if self.is_enabled() and not is_running:
+        if self.is_enabled() and not self.is_running():
             self.logger.debug(f"turning service {self.name} back on")
             self.start_all()
-        if is_running and not self.is_enabled():
+        if self.is_running() and not self.is_enabled():
             self.logger.debug(f"turning service {self.name} off")
             self.stop_all()
         return
@@ -136,10 +140,47 @@ class Service:
         return True
 
     def is_currently_scheduled(self):
-        return True
+        """
+        Check if the current time is within the scheduled times.
+        If no schedule is set, return True (always available).
+        """
+        if not self.scheduled_times:
+            return True
+
+        now = datetime.now()
+        current_day = now.weekday()
+        current_hour = now.hour
+
+        if current_day in self.scheduled_times:
+            if current_hour in self.scheduled_times[current_day]:
+                return True
+
+        return False
+
+    def add_scheduled_time(self, day, hours):
+        """
+        Add scheduled hours for a specific day.
+        :param day: Integer representing the day of the week (0=Monday, 6=Sunday)
+        :param hours: List of integers representing hours (0-23)
+        """
+        if day not in self.scheduled_times:
+            self.scheduled_times[day] = []
+        self.scheduled_times[day].extend(hours)
+        # Remove duplicates and sort
+        self.scheduled_times[day] = sorted(list(set(self.scheduled_times[day])))
 
     def apply_time_limit(self):
-        pass
+        """
+        Apply time limit to the service.
+        It only applies if the service is enabled and has scheduled times.
+        """
+        if not self.is_enabled() or not self.scheduled_times:
+            return
+        if not self.is_currently_scheduled():
+            self.stop()
+        else:
+            if not self.is_running():
+                self.start()
 
     def get_config_settings(self):
         settings_json = {
@@ -157,6 +198,8 @@ class Service:
             else:
                 json_conf = str_conf
             self.set_enabled(json_conf["enabled"])
+            self.service_config.set_service_config(self.name, json.dumps(json_conf))
+            self.service_config.save()
         except:
             self.logger.exception("error setting enabled")
         return

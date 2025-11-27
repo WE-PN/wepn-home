@@ -20,6 +20,10 @@ class Unbounded(Service):
         super().__init__("unbounded", logger)
         atexit.register(self.cleanup)
         self.system_service_name = "wepn-unbounded.service"
+        # add M-F, 1-3AM PST by dfault, to limit bandwidth even further
+        # this will be removed later once we have input from users via app
+        for day in range(5):
+            self.add_scheduled_time(day, [1, 2, 3])
 
     def get_limit(self):
         return self.get_overlayable_config_value("bw-limit", "28kbit")
@@ -82,6 +86,7 @@ class Unbounded(Service):
 
     def configure(self, json_conf):
         self.service_config.set_service_config(self.name, json.dumps(json_conf))
+        self.service_config.save()
         self.self_test()
         self.recover_missing_servers()
         return
