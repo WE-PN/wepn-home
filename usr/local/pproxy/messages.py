@@ -76,10 +76,10 @@ class Messages():
         response = requests.patch(url, data=data_json, headers=headers, timeout=GET_TIMEOUT)
         if response.status_code != 200:
             self.logger.critical("Cannot mark message as read: " + str(response.content))
-            try:
-                self.pending_items.remove(id)
-            except ValueError:
-                self.logger.critical("Message " + str(id) + "was marked as read, but it was not pending")
+        try:
+            self.pending_items.remove(id)
+        except ValueError:
+            self.logger.critical("Message " + str(id) + "was marked as read, but it was not pending")
         return response
 
     def send_msg(self, text, destination="APP", cert_id="", secure=True, msg_type=""):
