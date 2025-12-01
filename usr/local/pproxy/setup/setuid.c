@@ -6,7 +6,7 @@
 //#define DEBUG
 #define SRV_CNT 7
 #define CMD_CNT 6
-#define SPECIAL_CMD_CNT 24
+#define SPECIAL_CMD_CNT 26
 
 char* _sanitize(char input[], short type) {
 	static char ok_chars[] = "abcdefghijklmnopqrstuvwxyz"
@@ -92,6 +92,8 @@ int main(int argc, char * argv[])
 	scommands[21]= "/usr/bin/wg-quick down wg0";
 	scommands[22]= "/usr/bin/wg-quick up wg0";
 	scommands[23]= "/usr/local/sbin/limit_bandwidth.sh %s %s %s %s";
+	scommands[24]= "iptables -t mangle -L OUTPUT -v -x  -m owner --uid-owner \"`id -u %s`\" | grep \"wepn-bw\" | awk '{print $2}'";
+	scommands[25]= "iptables -t mangle -L OUTPUT -v -x -Z -m owner --uid-owner \"`id -u %s`\" | grep \"wepn-bw\" | awk '{print $2}'";
 
 	int c,s,t;
 
@@ -219,6 +221,19 @@ int main(int argc, char * argv[])
 
 			sprintf(cmd, scommands[s], argv[3], argv[4], argv[5], argv[6], argv[7]);
 		}
+		else if (s == 24 || s == 25) {
+			// 24 just gets the usage from iptables mangle rule
+			// 25 also resets the counter
+			if (argc != 4) {
+				printf("Missing params: username \n");
+				return(-1);
+			}
+
+			// username
+			sanitize(argv[3]);
+
+			sprintf(cmd, scommands[s], argv[3]);
+		}
 		else if (s == 7 || s == 16) {
 			// spcial commands that takes in arguments
 			if (argc != 4) {
@@ -233,6 +248,7 @@ int main(int argc, char * argv[])
 				sprintf(cmd, scommands[s], argv[3]);
 			}
 		} else {
+			sanitize(argv[3]);
 			sprintf(cmd, "%s", scommands[s]);
 		}
 	}
