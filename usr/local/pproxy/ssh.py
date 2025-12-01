@@ -16,6 +16,9 @@ class SSH(Service):
     def is_enabled(self):
         return self.device.is_ssh_service_running()
 
+    def is_running(self):
+        return self.is_enabled()
+
     def set_enabled(self, enabled):
         return self.device.set_sshd_service(enabled)
 

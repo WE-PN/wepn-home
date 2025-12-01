@@ -119,16 +119,18 @@ class Service:
         pass
 
     def is_running(self):
+        if self.system_service_name is None:
+            return self.is_enabled()
         device = Device(self.logger)
         return device.is_service_active(self.system_service_name)
 
     def recover_missing_servers(self):
         if self.system_service_name is None:
             return
-        if self.is_enabled() and not self.is_running():
+        if self.is_enabled() and not self.is_running() and self.is_currently_scheduled():
             self.logger.debug(f"turning service {self.name} back on")
             self.start_all()
-        if self.is_running() and not self.is_enabled():
+        elif self.is_running() and not self.is_enabled():
             self.logger.debug(f"turning service {self.name} off")
             self.stop_all()
         return
@@ -177,9 +179,12 @@ class Service:
         if not self.is_enabled() or not self.scheduled_times:
             return
         if not self.is_currently_scheduled():
-            self.stop()
+            if self.is_running():
+                self.logger.debug(f"apply_time_limit turning off {self.name}")
+                self.stop()
         else:
             if not self.is_running():
+                self.logger.debug(f"apply_time_limit turning on {self.name}")
                 self.start()
 
     def get_config_settings(self):
