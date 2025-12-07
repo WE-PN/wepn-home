@@ -55,6 +55,11 @@ rm -rf /.git/*
 
 echo -e "\nAdding users"
 $adduser pproxy --disabled-password --disabled-login --home $PPROXY_HOME --quiet --gecos "WEPN PPROXY User"
+$addgroup wepn-web
+$addgroup shadow-runners
+$adduser pproxy wepn-web
+$adduser wepn-api wepn-web
+$adduser wepn-api shadow-runners
 # Covering case of a first time setup
 /usr/bin/crontab -u pproxy $PPROXY_HOME/setup/cron
 $adduser openvpn --disabled-password --disabled-login  --quiet --gecos "OpenVPN User"
@@ -82,7 +87,7 @@ do
 done
 
 echo -e "correcting scripts that run as sudo"
-for SCRIPT in ip-shadow restart-pproxy update-pproxy update-system wepn_git prevent_location_issue iptables-flush check-venv limit_bandwdith permissions
+for SCRIPT in ip-shadow restart-pproxy update-pproxy update-system wepn_git prevent_location_issue iptables-flush check-venv limit_bandwidth permissions
 do
 	chown root:root /usr/local/sbin/$SCRIPT.sh
 	chmod 755 /usr/local/sbin/$SCRIPT.sh
@@ -248,11 +253,6 @@ sudo resolvconf -u
 # Create and correct permissions
 ##############################################################################
 
-$addgroup wepn-web
-$addgroup shadow-runners
-$adduser pproxy wepn-web
-$adduser wepn-api wepn-web
-$adduser wepn-api shadow-runners
 for db in shadow.db shadow.db-shm shadow.db-wal
 do
 	db_file=/var/local/pproxy/$db
@@ -320,9 +320,11 @@ systemctl daemon-reload
 systemctl enable wepn-api
 systemctl enable wepn-keypad
 systemctl enable wepn-leds
+systemctl enable wepn-main
 systemctl enable wepn-metrics
 systemctl start wepn-api
 systemctl start wepn-keypad
+systemctl start wepn-main
 systemctl start wepn-metrics
 systemctl start wepn-leds
 cd $PPROXY_HOME/setup/
