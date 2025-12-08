@@ -726,10 +726,10 @@ class KEYPAD:
                            (4, str(device_id), 0, "white"),
                            (5, info_str, 0, "white")]
             self.lcd.display(display_str, 18)
-        if fetched:
-            # Fetching is used mainly for remote customers,
-            # so we reboot automatically.
-            self.device.reboot()
+            if fetched:
+                # Fetching is used mainly for remote customers,
+                # so we reboot automatically.
+                self.device.reboot()
         else:
             self.menu[6][0]["text"] = "Generate"
             self.render()
