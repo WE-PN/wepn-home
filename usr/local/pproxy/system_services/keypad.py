@@ -360,12 +360,20 @@ class KEYPAD:
         current_e2e_key = self.status.get('status', 'temp_e2e_key')
         serial_number = self.config.get('django', 'serial_number')
         device_number = self.config.get('django', 'id')
+        eeprom_serial = self.device.get_serial_from_eeprom()
+        serial_color = "white"
+        if serial_number == "CHANGE_SERIALNUM":
+            if eeprom_serial is not None:
+                serial_number = eeprom_serial + "(e2p)"
+                serial_color = "orange"
+        elif serial_number != eeprom_serial:
+            serial_color = "red"
         display_str = [(1, "Device Key:", 0, "blue"), (2, str(current_key), 0, "white"),
-                       (3, "Serial #", 0, "blue"), (4, serial_number, 0, "white"),
+                       (3, "Serial #", 0, "blue"), (4, serial_number, 0, serial_color),
                        (5, "[ID]", 0, "blue"), (6, device_number, 0, "white"),
                        (7, current_e2e_key, 0, "white")]
         if self.screen_timed_out is False:
-            self.lcd.display(display_str, 20)
+            self.lcd.display(display_str, 16)
         # self.render()
         return True  # exit the menu
 
