@@ -398,6 +398,14 @@ else
    echo -e 'dtparam=spi=on' >> $BOOT_CONFIG
 fi
 
+echo -e "\n adjust fan threshold temperature"
+if grep -Fxq "dtoverlay=gpio-fan,gpiopin=22,temp=55000" $BOOT_CONFIG
+then
+   echo "fan aleady enabled"
+else
+   echo -e 'dtoverlay=gpio-fan,gpiopin=22,temp=55000' >> $BOOT_CONFIG
+fi
+
 echo -e "\n#### Restarting services ####"
 /usr/sbin/modprobe i2c_dev
 /usr/sbin/modprobe i2c_bcm2708
