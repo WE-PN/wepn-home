@@ -4,6 +4,7 @@ try:
 except Exception as e:
     print("RPi import failed")
     print(e)
+from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
 import board
 import logging
@@ -105,6 +106,7 @@ class KEYPAD:
         self.dev_remaining = 7
         self.retries_before_ota_check = 0
         self.channel = self.device.get_ota_channel()
+        self.last_generation_req_time = 0
 
     def init_i2c(self):
         if (int(self.config.get('hw', 'buttons'))) == 0:
@@ -699,6 +701,17 @@ class KEYPAD:
 
     def generate_config(self):
         self.display_active = True
+        current_time = int(round(datetime.now().timestamp()))
+        if ((current_time - self.last_generation_req_time) < 5):
+            self.logger.debug("button pressed too quickly again, ignore")
+            self.menu[6][0]["text"] = "Still waiting"
+            self.render()
+            time.sleep(1)
+            self.menu[6][0]["text"] = "Generate"
+            self.render()
+            return
+        self.last_generation_req_time = current_time
+
         # this should only run if device has not real config
         # while initial provisioning is happening
         # first try the web method, needs manual action from support
