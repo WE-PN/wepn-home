@@ -62,7 +62,7 @@ def random_cron_delay(args):
         for o, a in opts:
             if o in ("-d", "--random-delay"):
                 use_delay = True
-    except getopt.GetoptErrori:
+    except getopt.GetoptError:
         use_delay = False
     if use_delay:
         time.sleep(random.randrange(min_delay, max_delay, 1))  # nosec not security
