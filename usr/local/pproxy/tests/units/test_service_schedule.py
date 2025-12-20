@@ -1,17 +1,19 @@
+import service
 import os
 import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
-# Mock dependencies
-sys.modules['device'] = MagicMock()
-sys.modules['wstatus'] = MagicMock()
-sys.modules['constants'] = MagicMock()
+# Mock EXTERNAL dependencies only
+for m in ['getmac', 'pystemd', 'pystemd.systemd1', 'distro', 'netifaces', 'psutil', 'upnpclient', 'packaging', 'packaging.version', 'qrcode', 'Adafruit_SSD1306', 'adafruit_rgb_display', 'board', 'sqlalchemy', 'sqlalchemy.exc']:
+    if m not in sys.modules:
+        sys.modules[m] = MagicMock()
 
 # Import Service
 up_dir = os.path.dirname(os.path.abspath(__file__)) + '/../../'
-sys.path.append(up_dir)
-import service
+if up_dir not in sys.path:
+    sys.path.append(up_dir)
+
 
 class TestServiceSchedule(unittest.TestCase):
     @patch('service.configparser')
@@ -53,9 +55,10 @@ class TestServiceSchedule(unittest.TestCase):
         self.assertFalse(self.service.is_currently_scheduled())
 
         # Case 4: Wrong day
-        mock_now.weekday.return_value = 1 # Tuesday
+        mock_now.weekday.return_value = 1  # Tuesday
         mock_now.hour = 10
         self.assertFalse(self.service.is_currently_scheduled())
+
 
 if __name__ == '__main__':
     unittest.main()
