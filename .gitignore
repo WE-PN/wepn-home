@@ -28,6 +28,7 @@ __pycache__/
 .dotnet
 .vscode-server
 .bashrc
+.converage
 
 
 .config

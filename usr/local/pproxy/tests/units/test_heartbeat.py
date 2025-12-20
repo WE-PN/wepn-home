@@ -4,7 +4,7 @@ import pytest
 from unittest.mock import MagicMock, patch, ANY
 
 # Add the parent directory to sys.path to import modules
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 # Mock modules that might have missing dependencies or side effects on import
 sys.modules['device'] = MagicMock()

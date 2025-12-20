@@ -9,7 +9,7 @@ sys.modules['wstatus'] = MagicMock()
 sys.modules['constants'] = MagicMock()
 
 # Import Service
-up_dir = os.path.dirname(os.path.abspath(__file__)) + '/../'
+up_dir = os.path.dirname(os.path.abspath(__file__)) + '/../../'
 sys.path.append(up_dir)
 import service
 

@@ -6,7 +6,7 @@ import base64
 import json
 
 # Add the parent directory to sys.path to import messages
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 # Mock logging config before importing messages to avoid side effects
 with patch('logging.config.fileConfig'):
