@@ -1,6 +1,3 @@
-
-from device import Device
-import device
 import sys
 import os
 import pytest
@@ -13,9 +10,12 @@ import json
 for m in ['getmac', 'pystemd', 'pystemd.systemd1', 'distro', 'netifaces', 'psutil', 'upnpclient', 'packaging', 'packaging.version', 'qrcode', 'Adafruit_SSD1306', 'adafruit_rgb_display', 'board', 'sqlalchemy', 'sqlalchemy.exc', 'dataset', 'digitalio', 'busio', 'sanitize_filename']:
     if m not in sys.modules:
         sys.modules[m] = MagicMock()
-
+# autopep8: off
 # Add parent directory to path to import device
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from device import Device
+import device
+# autopep8: on
 
 
 @pytest.fixture

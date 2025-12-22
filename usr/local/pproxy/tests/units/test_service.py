@@ -1,4 +1,3 @@
-
 import service
 import os
 import sys
@@ -7,8 +6,6 @@ from unittest.mock import MagicMock, patch, call
 import json
 
 # Mock EXTERNAL dependencies only
-import sys
-from unittest.mock import MagicMock, patch
 for m in ['getmac', 'pystemd', 'pystemd.systemd1', 'distro', 'netifaces', 'psutil', 'upnpclient', 'packaging', 'packaging.version', 'qrcode', 'Adafruit_SSD1306', 'adafruit_rgb_display', 'board', 'sqlalchemy', 'sqlalchemy.exc']:
     if m not in sys.modules:
         sys.modules[m] = MagicMock()

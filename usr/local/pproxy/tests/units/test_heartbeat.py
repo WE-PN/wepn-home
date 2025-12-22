@@ -1,11 +1,13 @@
-from constants import HEALTHY_DIAG_CODE, HEARTBEATS_TO_WARM, METRICS_REPORT_INTERVAL_SECONDS
 import sys
 import os
 import pytest
 from unittest.mock import MagicMock, patch, ANY
 
+#autopep8: off
 # Add the parent directory to sys.path to import modules
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+from constants import HEALTHY_DIAG_CODE, HEARTBEATS_TO_WARM, METRICS_REPORT_INTERVAL_SECONDS
+#autopep8: on
 
 # Mock EXTERNAL dependencies only
 for m in ['qrcode', 'Adafruit_SSD1306', 'getmac', 'pystemd', 'pystemd.systemd1', 'distro', 'netifaces', 'psutil', 'upnpclient', 'packaging', 'packaging.version', 'adafruit_rgb_display', 'adafruit_rgb_display.st7789', 'sanitize_filename', 'RPi', 'RPi.GPIO', 'luma', 'luma.core', 'luma.core.interface', 'luma.core.interface.serial', 'luma.oled', 'luma.oled.device', 'board', 'sqlalchemy', 'sqlalchemy.exc', 'dataset', 'digitalio', 'busio']:

@@ -1,15 +1,17 @@
 
-from wstatus import WStatus, STATUS_FILE
 import os
 import sys
 import unittest
 from unittest.mock import MagicMock, patch, mock_open
 import json
 
+#autopep8: off
 # Add parent directory to path to import wstatus
 up_dir = os.path.dirname(os.path.abspath(__file__)) + '/../../'
 if up_dir not in sys.path:
     sys.path.append(up_dir)
+from wstatus import WStatus, STATUS_FILE
+#autopep8: on
 
 
 class TestWStatus(unittest.TestCase):

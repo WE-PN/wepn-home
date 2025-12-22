@@ -1,4 +1,3 @@
-import service
 import os
 import sys
 import unittest
@@ -9,10 +8,13 @@ for m in ['getmac', 'pystemd', 'pystemd.systemd1', 'distro', 'netifaces', 'psuti
     if m not in sys.modules:
         sys.modules[m] = MagicMock()
 
+#autopep8: off
 # Import Service
 up_dir = os.path.dirname(os.path.abspath(__file__)) + '/../../'
 if up_dir not in sys.path:
     sys.path.append(up_dir)
+import service
+#autopep8: on
 
 
 class TestServiceSchedule(unittest.TestCase):
