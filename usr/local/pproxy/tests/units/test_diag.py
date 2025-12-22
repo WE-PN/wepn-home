@@ -10,11 +10,7 @@ import os
 import sys
 from unittest.mock import MagicMock
 
-# Mock modules that might be missing in the test environment BEFORE importing diag
-for m in ['getmac', 'pystemd', 'pystemd.systemd1', 'distro', 'netifaces', 'psutil', 'upnpclient', 'packaging', 'packaging.version', 'qrcode', 'Adafruit_SSD1306', 'adafruit_rgb_display', 'board', 'sqlalchemy', 'sqlalchemy.exc', 'dataset', 'digitalio', 'busio', 'sanitize_filename']:
-    if m not in sys.modules:
-        sys.modules[m] = MagicMock()
-
+# Constants for testing
 constants.DEFAULT_GET_TIMEOUT = 10
 constants.CONNECTIVITY_TEST_URLS = ["http://google.com"]
 
