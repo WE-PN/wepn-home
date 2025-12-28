@@ -1,6 +1,7 @@
+import argparse
+import glob
 import os
 import subprocess
-import glob
 import sys
 
 
@@ -20,7 +21,8 @@ def get_module_name(test_filename):
     return None
 
 
-def main():
+def main(prefix_path, pytest_binary):
+    os.chdir(prefix_path)
     if not os.path.exists("service.py"):
         print("Error: Please run this script from the project root directory.")
         sys.exit(1)
@@ -44,7 +46,7 @@ def main():
 
     # Construct pytest command
     # Running all together for proper coverage aggregation
-    cmd = ["pytest", "-v", "--cov-report", "term-missing"]
+    cmd = [pytest_binary, "-v", "--cov-report", "term-missing"]
     for m in sorted_modules:
         cmd.append(f"--cov={m}")
     cmd.append(test_dir)
@@ -56,4 +58,10 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="The runner for pytests with coverage")
+    parser.add_argument("--path", type=str, default="./", help="The path to source files.")
+    parser.add_argument("--pytest", type=str, default="pytest", help="The path to the pytest.")
+
+    args = parser.parse_args()
+
+    main(prefix_path=args.path, pytest_binary=args.pytest)
