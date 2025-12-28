@@ -2,6 +2,7 @@ import atexit
 import json
 
 from device import Device
+from device import SRUN as SRUN
 from ipw import IPW
 from service import Service
 
@@ -90,3 +91,12 @@ class Unbounded(Service):
         self.self_test()
         self.recover_missing_servers()
         return
+
+    def get_usage_status_summary(self):
+        device = Device(self.logger)
+        result, err, failed, sp = device.execute_cmd_output(SRUN + " 1 25 unbounded")
+        try:
+            bits = int(result.decode("utf-8").strip())
+        except:
+            bits = 0
+        return {"unbounded": 1}, {"unbounded": bits}

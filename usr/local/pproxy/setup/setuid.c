@@ -252,8 +252,9 @@ int main(int argc, char * argv[])
 			sprintf(cmd, "%s", scommands[s]);
 		}
 	}
+#ifdef DEBUG
 	printf("\ncmd= %s\n", cmd);
-	printf("\n");
+#endif
 	setuid(0);
 	p = popen(cmd,"r");
 	if ( p == NULL )
