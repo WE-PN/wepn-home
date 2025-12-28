@@ -532,6 +532,8 @@ class PProxy():
             self.device.update()
         elif (data['action'] == 'update-all'):
             self.device.update_all()
+        elif (data['action'] == 'install-package'):
+            self.device.install_package(self.sanitize_str(data['package']))
         elif (data['action'] == 'set_creds'):
             if (data['host']):
                 self.config.set('email', 'host',

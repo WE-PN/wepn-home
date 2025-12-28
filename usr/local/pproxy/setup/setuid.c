@@ -6,7 +6,7 @@
 //#define DEBUG
 #define SRV_CNT 7
 #define CMD_CNT 6
-#define SPECIAL_CMD_CNT 26
+#define SPECIAL_CMD_CNT 27
 
 char* _sanitize(char input[], short type) {
 	static char ok_chars[] = "abcdefghijklmnopqrstuvwxyz"
@@ -94,6 +94,7 @@ int main(int argc, char * argv[])
 	scommands[23]= "/usr/local/sbin/limit_bandwidth.sh %s %s %s %s";
 	scommands[24]= "iptables -t mangle -L OUTPUT -v -x  -m owner --uid-owner \"`id -u %s`\" | grep \"wepn-bw\" | awk '{print $2}'";
 	scommands[25]= "iptables -t mangle -L OUTPUT -v -x -Z -m owner --uid-owner \"`id -u %s`\" | grep \"wepn-bw\" | awk '{print $2}'";
+	scommands[26]= "/usr/bin/apt-get -y -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confnew\" -f install wepn-unbounded";
 
 	int c,s,t;
 
@@ -247,6 +248,9 @@ int main(int argc, char * argv[])
 				sanitize(argv[3]);
 				sprintf(cmd, scommands[s], argv[3]);
 			}
+		}
+		else if (s == 26) {
+			sprintf(cmd, "%s", scommands[s]);
 		} else {
 			sanitize(argv[3]);
 			sprintf(cmd, "%s", scommands[s]);

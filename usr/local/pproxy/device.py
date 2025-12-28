@@ -226,6 +226,13 @@ class Device():
         cmd = "1 4"
         self.execute_setuid(cmd)
 
+    def install_pacakge(self, package_name="unbounded"):
+        # ideally this should be an allowlist and a more dynamic structure
+        # but for now, hard coding unbounded to avoid security concerns
+        if package_name == "unbounded":
+            cmd = "1 26"
+            self.execute_setuid(cmd)
+
     def get_safe_skipping_start_date(self):
         # make sure a str is not returned when not set
         skip_start_date = self.port_status.get_field('port-fwd', 'skipping-date')
