@@ -1,3 +1,4 @@
+import io
 import json
 
 try:
@@ -15,8 +16,17 @@ class WStatus:
             source_file = STATUS_FILE
         self.status.read(source_file)
         self.source_file = source_file
+        self.orig_hash = hash(self.config_to_string(self.status))
+
+    def config_to_string(self, cfg: configparser.ConfigParser) -> str:
+        with io.StringIO() as output:
+            cfg.write(output)
+            return output.getvalue()
 
     def save(self):
+        new_hash = hash(self.config_to_string(self.status))
+        if new_hash == self.orig_hash:
+            return
         # TODO: add lock checking
         if self.source_file is not None and self.status is not None:
             self.logger.info(f"writing status file {self.source_file}")
