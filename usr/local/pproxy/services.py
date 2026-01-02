@@ -138,17 +138,24 @@ class Services:
                     creds.update(res)
         return creds
 
-    def get_usage_status_summary(self):
-        usages = {}
+    def get_usage_deltas(self, clear_counters=False):
         deltas = {}
         for service in self.services:
-            usage, delta = service['obj'].get_usage_status_summary()
-            if bool(usage):   # check if there are any friends
-                self.logger.debug(usage)
-                self.logger.debug(delta)
-                usages.update(usage)
+            delta = service['obj'].get_usage_deltas(clear_counters)
+            if bool(delta):   # check if there are any friends
                 deltas.update(delta)
-        return usages, deltas
+        return deltas
+
+    def get_usage_status_summary(self):
+        usages = {}
+        for service in self.services:
+            usage = service['obj'].get_usage_status_summary()
+            import pprint
+            pprint.pprint(service)
+            pprint.pprint(usage)
+            if bool(usage):   # check if there are any friends
+                usages.update(usage)
+        return usages
 
     def get_usage_daily(self):
         usage = {}

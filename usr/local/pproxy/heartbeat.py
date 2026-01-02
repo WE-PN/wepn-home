@@ -120,6 +120,8 @@ class HeartBeat:
     # send heartbeat. if lcd_print==1, update LCD
     def send_heartbeat(self, lcd_print=0):
         try:
+            # prevent the measurement timestamp getting overwritten
+            # buffer it and write it back
             buffered_measurement_timestamp = self.status.status.getint("status", "last_measurement_send_timestamp")
         except:
             buffered_measurement_timestamp = 0
@@ -161,8 +163,7 @@ class HeartBeat:
         else:
             status = int(self.status.get('state'))
         access_creds = self.services.get_service_creds_summary(external_ip)
-        usage_status, usage_deltas = self.services.get_usage_status_summary()
-        self.logger.debug(usage_status)
+        usage_status = self.services.get_usage_status_summary()
         try:
             with open('local_server/wepn-local.sig') as f:
                 # this signature is updated every time
@@ -240,14 +241,14 @@ class HeartBeat:
             last_ts = timestamp
         hb_time_delta = timestamp - last_ts
         if hb_time_delta < METRICS_REPORT_INTERVAL_SECONDS:
-            self.logger.debug(f"not the minimum time has passed({hb_time_delta}), no report needed")
+            self.logger.debug(f"the minimum time has not passed({hb_time_delta}), no report needed")
             return
         headers = {
             'content-type': 'application/json',
             'Accept-Charset': 'UTF-8'
         }
-        usage_status, usage_deltas = self.services.get_usage_status_summary()
-        self.logger.debug(usage_status)
+        usage_deltas = self.services.get_usage_deltas(clear_counters=True)
+        self.logger.debug(usage_deltas)
         try:
             usage_countries = self.metrics.get_report()
         except:
@@ -261,7 +262,6 @@ class HeartBeat:
             "usage_deltas": usage_deltas,
             "usage_countries": usage_countries,
         }
-
         data_json = json.dumps(data)
         self.logger.debug("Metrics data to send: " + data_json)
         url = f"{self.config.get('django', 'url')}/api/device/{self.config.get('django', 'id')}/usage/"

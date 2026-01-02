@@ -92,8 +92,8 @@ int main(int argc, char * argv[])
 	scommands[21]= "/usr/bin/wg-quick down wg0";
 	scommands[22]= "/usr/bin/wg-quick up wg0";
 	scommands[23]= "/usr/local/sbin/limit_bandwidth.sh %s %s %s %s";
-	scommands[24]= "iptables -t mangle -L OUTPUT -v -x  -m owner --uid-owner \"`id -u %s`\" | grep \"wepn-bw\" | awk '{print $2}'";
-	scommands[25]= "iptables -t mangle -L OUTPUT -v -x -Z -m owner --uid-owner \"`id -u %s`\" | grep \"wepn-bw\" | awk '{print $2}'";
+	scommands[24]= "/usr/sbin/iptables -t mangle -L OUTPUT -v -x  -m owner --uid-owner \"`id -u %s`\" | grep \"wepn-bw\" | awk '{print $2}'";
+	scommands[25]= "/usr/sbin/iptables -t mangle -L OUTPUT -v -x -Z -m owner --uid-owner \"`id -u %s`\" | grep \"wepn-bw\" | awk '{print $2}'";
 	scommands[26]= "/usr/bin/apt-get -y -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confnew\" -f install wepn-unbounded";
 
 	int c,s,t;

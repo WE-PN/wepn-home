@@ -45,15 +45,14 @@ class Unbounded(Service):
 
     def start_all(self):
         device = Device(self.logger)
-        # TODO: set hour limits
+        # apply the bandwidth limit
         device.execute_setuid(f"1 23 set unbounded eth0 {self.get_limit()}")
+        # start the wepn-unbounded service
         device.execute_setuid("0 6 1")
 
     def stop_all(self):
         device = Device(self.logger)
         device.execute_setuid("0 6 0")
-        # TODO: remove hour limits
-        device.execute_setuid(f"1 23 remove unbounded eth0 {self.get_limit()}")
 
     def start(self):
         self.start_all()
@@ -92,11 +91,18 @@ class Unbounded(Service):
         self.recover_missing_servers()
         return
 
-    def get_usage_status_summary(self):
+    def get_usage_status_summary(self, clear_counters=False):
+        return {"unbounded": 1}
+
+    def get_usage_deltas(self, clear_counters=False):
         device = Device(self.logger)
-        result, err, failed, sp = device.execute_cmd_output(SRUN + " 1 25 unbounded")
+        if clear_counters:
+            cmd = " 1 25 unbounded"
+        else:
+            cmd = " 1 24 unbounded"
+        result, err, failed, sp = device.execute_cmd_output(SRUN + cmd)
         try:
             bits = int(result.decode("utf-8").strip())
         except:
             bits = 0
-        return {"unbounded": 1}, {"unbounded": bits}
+        return {"unbounded": bits}

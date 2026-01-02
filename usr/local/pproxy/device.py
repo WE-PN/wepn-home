@@ -191,7 +191,7 @@ class Device():
                 out, err = sp.communicate()
                 sp.wait()
                 if err:
-                    print("error in sp.communicate")
+                    print("error in sp.communicate: \n" + str(err))
                     time.sleep(3)
                     failed += 1
             return out, err, failed, sp

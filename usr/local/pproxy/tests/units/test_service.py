@@ -124,7 +124,7 @@ class TestService(unittest.TestCase):
     def test_empty_methods(self):
         # Verify placeholders return expected empty values
         self.assertEqual(self.service.get_service_creds_summary("1.2.3.4"), {})
-        self.assertEqual(self.service.get_usage_status_summary(), ({}, {}))
+        self.assertEqual(self.service.get_usage_status_summary(), ({}))
         self.assertEqual(self.service.get_usage_daily(), {})
         self.assertEqual(self.service.get_short_link_text("cname", "ip"), "")
         self.assertIsNone(self.service.get_access_link("cname"))

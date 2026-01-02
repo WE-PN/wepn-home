@@ -318,6 +318,15 @@ class Shadow(Service):
         return link
 
     def get_usage_status_summary(self):
+        usage, deltas = self.get_usage_status_and_deltas()
+        return usage
+
+    def get_usage_deltas(self, clear_counters=False):
+        usage, deltas = self.get_usage_status_and_deltas(clear_counters)
+        return deltas
+
+    # TODO: this needs to be split, so above calls are not redundant
+    def get_usage_status_and_deltas(self, clear_counters=False):
         self.logger.debug("---summary -----")
         local_db = dataset.connect(
             'sqlite:///' + self.config.get('shadow', 'db-path') + "?check_same_thread=False")

@@ -87,7 +87,10 @@ class Service:
         return {}
 
     def get_usage_status_summary(self):
-        return {}, {}
+        return {}
+
+    def get_usage_deltas(self, clear_counters=False):
+        return {}
 
     def get_usage_daily(self):
         return {}

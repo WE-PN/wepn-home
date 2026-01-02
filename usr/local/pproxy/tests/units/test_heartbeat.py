@@ -67,7 +67,8 @@ def mock_dependencies():
         mock_wpdiag.return_value.get_error_code.return_value = HEALTHY_DIAG_CODE
 
         # Default services values
-        mock_services.return_value.get_usage_status_summary.return_value = ({}, {})
+        mock_services.return_value.get_usage_status_summary.return_value = ({})
+        mock_services.return_value.get_usage_deltas.return_value = ({})
         mock_services.return_value.get_service_creds_summary.return_value = {}
 
         # Default device values

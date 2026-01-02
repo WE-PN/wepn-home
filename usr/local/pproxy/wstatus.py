@@ -19,9 +19,13 @@ class WStatus:
         self.orig_hash = hash(self.config_to_string(self.status))
 
     def config_to_string(self, cfg: configparser.ConfigParser) -> str:
-        with io.StringIO() as output:
-            cfg.write(output)
-            return output.getvalue()
+        try:
+            with io.StringIO() as output:
+                cfg.write(output)
+                return output.getvalue()
+        except Exception:
+            self.logger.exception("could not convert the config to a string")
+            return ""
 
     def save(self):
         new_hash = hash(self.config_to_string(self.status))

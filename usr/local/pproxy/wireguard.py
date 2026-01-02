@@ -104,10 +104,9 @@ class Wireguard(Service):
 
     def get_usage_status_summary(self):
         usage = {}
-        usage_deltas = {}
         for d in self.get_users_list():
             usage[d] = -1
-        return usage, usage_deltas
+        return usage
 
     def get_usage_daily(self):
         return {}

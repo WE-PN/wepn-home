@@ -64,9 +64,6 @@ class OpenVPN(Service):
     def get_service_creds_summary(self, ip_address):
         return {}
 
-    def get_usage_status_summary(self):
-        return {}, {}
-
     def get_usage_daily(self):
         return {}
 
