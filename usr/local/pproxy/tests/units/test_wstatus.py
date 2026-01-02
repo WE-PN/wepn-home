@@ -24,6 +24,13 @@ class TestWStatus(unittest.TestCase):
         self.mock_config = self.mock_config_parser_class.return_value
         self.addCleanup(patcher.stop)
 
+        # Patch config_to_string to avoid real StringIO/write calls and control hash
+        # We can use a side_effect to return different values
+        self.cts_patcher = patch('wstatus.WStatus.config_to_string')
+        self.mock_cts = self.cts_patcher.start()
+        self.mock_cts.return_value = "initial_status"
+        self.addCleanup(self.cts_patcher.stop)
+
         # Setup common existing sections/options for tests
         self.mock_config.has_section.return_value = False
         self.mock_config.__getitem__.return_value = {}  # Default dict for config bits
@@ -41,6 +48,9 @@ class TestWStatus(unittest.TestCase):
 
     def test_save_success(self):
         ws = WStatus(self.mock_logger)
+        # Update CTS to return "changed" value
+        self.mock_cts.return_value = "changed_status"
+
         m_open = mock_open()
         with patch('builtins.open', m_open):
             ws.save()
@@ -50,6 +60,9 @@ class TestWStatus(unittest.TestCase):
 
     def test_save_exception(self):
         ws = WStatus(self.mock_logger)
+        # Update CTS to return "changed" value
+        self.mock_cts.return_value = "changed_status"
+
         with patch('builtins.open', side_effect=IOError("Permission denied")):
             ws.save()
 
@@ -57,6 +70,40 @@ class TestWStatus(unittest.TestCase):
         self.assertTrue(self.mock_logger.debug.called)
         args, _ = self.mock_logger.debug.call_args
         self.assertIn("Something happened when writing status file", args[0])
+
+    def test_save_no_change(self):
+        ws = WStatus(self.mock_logger)
+        # No modification of CTS return value
+        m_open = mock_open()
+        with patch('builtins.open', m_open):
+            ws.save()
+
+        m_open.assert_not_called()
+        self.mock_config.write.assert_not_called()
+
+    def test_save_multiple_times(self):
+        ws = WStatus(self.mock_logger)
+        # First change
+        self.mock_cts.return_value = "changed_1"
+
+        m_open = mock_open()
+        with patch('builtins.open', m_open):
+            ws.save()
+            # Second call without further changes
+            ws.save()
+
+        # Should only have been opened once
+        self.assertEqual(m_open.call_count, 1)
+        self.assertEqual(self.mock_config.write.call_count, 1)
+
+        # Third call with new change
+        self.mock_cts.return_value = "changed_2"
+        with patch('builtins.open', m_open):
+            ws.save()
+
+        # Total calls should now be 2
+        self.assertEqual(m_open.call_count, 2)
+        self.assertEqual(self.mock_config.write.call_count, 2)
 
     def test_reload(self):
         ws = WStatus(self.mock_logger)

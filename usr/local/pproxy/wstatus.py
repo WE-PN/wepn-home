@@ -38,6 +38,7 @@ class WStatus:
                 statusfile = open(self.source_file, 'w')
                 self.status.write(statusfile)
                 statusfile.close()
+                self.orig_hash = new_hash
             except Exception as err:
                 self.logger.debug(
                     "Something happened when writing status file:" + self.source_file
