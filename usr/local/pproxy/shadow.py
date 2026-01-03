@@ -66,21 +66,16 @@ class Shadow(Service):
 
     def add_user(self, cname, ip_address, password, unused_port, lang):
         is_new_user = False
-        local_db = dataset.connect(
-            'sqlite:///' + self.config.get('shadow', 'db-path') + "?check_same_thread=False")
-        # get max of assigned ports, new port is 1+ that.
-        # if no entry in DB, copy from config default port start
-        servers = local_db['servers']
-        server = servers.find_one(certname=cname)
-        # if already exists, use same port
-        # else assign a new port, 1+laargest existing
+        # Use db_query to find the user
+        table = self.db_query('servers', return_table=True)
+        server = table.find_one(certname=cname) if table else None
+
         if server is None:
             is_new_user = True
             try:
-                results = local_db.query(
-                    'select max(server_port) from servers')
-                row = list(results)[0]
-                max_port = row['max(server_port)']
+                results = self.db_query(query_str='select max(server_port) from servers')
+                row = results[0] if results else {}
+                max_port = row.get('max(server_port)')
             except:
                 max_port = None
             if max_port is None:
@@ -91,8 +86,6 @@ class Shadow(Service):
                 self.logger.error("Error while finding next good port: " + str(err))
         else:
             port = server['server_port']
-            # also reuse the same password, making it easier for end user
-            # to update the app manually if needed
             password = server['password']
 
         new_server = {"server_port": port,
@@ -100,14 +93,16 @@ class Shadow(Service):
                       "certname": cname}
         self.start_server(new_server)
 
-        # add certname, port, password to a json list to use at delete/boot
-        servers.upsert({'certname': cname, 'server_port': port, 'password': password, 'language': lang},
-                       ['certname'])
-        # retrun success or failure if file doesn't exist
-        for a in local_db['servers']:
-            self.logger.debug("server: " + str(a))
-        local_db.commit()
-        local_db.close()
+        table = self.db_query('servers', return_table=True)
+        if table:
+            table.upsert({'certname': cname, 'server_port': port, 'password': password, 'language': lang},
+                         ['certname'])
+
+        all_servers = self.db_query('servers')
+        if all_servers:
+            for a in all_servers:
+                self.logger.debug("server: " + str(a))
+
         self.metrics.add_ports([{"port": port, "name": cname}])
         return is_new_user
 
@@ -125,30 +120,24 @@ class Shadow(Service):
 
     def delete_user(self, cname):
         # stop the service for that cert
-        local_db = dataset.connect(
-            'sqlite:///' + self.config.get('shadow', 'db-path') + "?check_same_thread=False")
-        servers = local_db['servers']
-        server = servers.find_one(certname=cname)
+        table = self.db_query('servers', return_table=True)
+        server = table.find_one(certname=cname) if table else None
         if server is not None:
-
             port = server['server_port']
             cmd = 'remove : {"server_port": ' + str(server['server_port']) + ' } '
             self.sock.send(str.encode(cmd))
             self.logger.info("socket response to delete:"
                              + str(self.sock.recv(1056)))
-            # add certname, port, password to a json list to ues at delete/boot
-            servers.delete(certname=cname)
+
+            table = self.db_query('servers', return_table=True)
+            if table:
+                table.delete(certname=cname)
+
             self.logger.info('disabling port forwarding to port ' + str(port))
             device = Device(self.logger)
             device.close_port(port)
             self.metrics.remove_ports([port, ])
         self.del_user_usage(cname)
-        # retrun success or failure if file doesn't exist
-        if 0 and local_db is not None:
-            for a in local_db['servers']:
-                self.logger.debug("servers for delete: " + str(a))
-        local_db.commit()
-        local_db.close()
         return
 
     def shadow_conf_file_save(self, server_port, password):
@@ -179,43 +168,59 @@ class Shadow(Service):
         # once the ss-manager is updated from source, remove this workaround
         self.shadow_conf_file_save(
             server['server_port'], server['password'])
-        self.sock.send(str.encode(cmd))
-        self.shadow_conf_file_save(
-            server['server_port'], server['password'])
-        self.logger.debug(cmd + ' >> ' + str(self.sock.recv(1056)))
+        try:
+            self.sock.send(str.encode(cmd))
+            self.shadow_conf_file_save(
+                server['server_port'], server['password'])
+            self.logger.debug(cmd + ' >> ' + str(self.sock.recv(1056)))
+        except Exception as e:
+            self.logger.error(f"Error starting server on port {server['server_port']}: {e}")
         self.metrics.add_ports([{"port": server['server_port'], "name": server['certname']}])
+
+    def db_query(self, table_name=None, query_str=None, use_backup=False, config_key='db-path', return_table=False):
+        """
+        Generalized DB query method with error handling and recovery.
+        """
+        db_path = self.config.get('shadow', config_key)
+        if use_backup:
+            db_path += ".backup"
+
+        try:
+            local_db = dataset.connect(
+                'sqlite:///' + db_path + "?check_same_thread=False")
+
+            if query_str:
+                results = local_db.query(query_str)
+                return list(results)
+
+            if table_name:
+                table = local_db[table_name]
+                if return_table:
+                    return table
+                # Trigger a check by doing a count
+                table.count()
+                return list(table.all())
+
+            return local_db
+        except Exception as e:
+            self.logger.error(
+                f"Database query error (config_key={config_key}, backup={use_backup}): {e}")
+            msg = str(e).lower()
+            if config_key == 'db-path' and not use_backup and ("malformed" in msg or "corrupt" in msg):
+                self.logger.warning("Corruption detected during db_query, attempting restore.")
+                if self.restore():
+                    # Retry once after restore
+                    return self.db_query(table_name, query_str, use_backup, config_key, return_table)
+            return None
 
     def start_all(self):
         # used at boot time
         # loop over cert files, start each
-        db_path = self.config.get('shadow', 'db-path')
-        try:
-            local_db = dataset.connect(
-                'sqlite:///' + db_path + "?check_same_thread=False")
-            servers = local_db['servers']
-            if len(servers) == 0:
-                return
-        except Exception as e:
-            self.logger.error(f"Error in start_all: {e}")
-            msg = str(e).lower()
-            if "malformed" in msg or "corrupt" in msg:
-                self.logger.warning(
-                    "Database corruption detected in start_all, attempting restore.")
-                if self.restore():
-                    try:
-                        local_db = dataset.connect(
-                            'sqlite:///' + db_path + "?check_same_thread=False")
-                        servers = local_db['servers']
-                    except Exception as e2:
-                        self.logger.error(f"Failed to reconnect after restore: {e2}")
-                        return
-                else:
-                    self.logger.error("Failed to restore database in start_all.")
-                    return
-            else:
-                return
+        servers = self.db_query('servers')
+        if not servers:
+            return
 
-        for server in local_db['servers']:
+        for server in servers:
             time.sleep(1)
             self.start_server(server)
         return
@@ -223,42 +228,31 @@ class Shadow(Service):
     def stop_all(self):
         # used at service stop time
         # loop over cert files, stop all
-        local_db = dataset.connect(
-            'sqlite:///' + self.config.get('shadow', 'db-path') + "?check_same_thread=False")
-        servers = local_db['servers']
-        try:
-            if not servers:
-                self.logger.info('no servers')
-                return
-            for server in local_db['servers']:
-                cmd = 'remove : {"server_port": ' + str(server['server_port']) + ' } '
-                self.sock.send(str.encode(cmd))
-                self.logger.debug(
-                    server['certname'] + ' >>' + cmd + ' >> ' + str(self.sock.recv(1056)))
-                self.metrics.remove_ports([server['server_port', ]])
+        servers = self.db_query('servers')
+        if not servers:
+            self.logger.info('no servers')
             return
-        except Exception:
-            return
+
+        for server in servers:
+            cmd = 'remove : {"server_port": ' + str(server['server_port']) + ' } '
+            self.sock.send(str.encode(cmd))
+            self.logger.debug(
+                server['certname'] + ' >>' + cmd + ' >> ' + str(self.sock.recv(1056)))
+            self.metrics.remove_ports([server['server_port']])
     # forward_all is used with cron to make sure port forwardings stay active
     # if service is stopped, forwardings can stay active. there will be no ss server to serve
 
     def forward_all(self):
-        local_db = dataset.connect(
-            'sqlite:///' + self.config.get('shadow', 'db-path') + "?check_same_thread=False")
-        servers = local_db['servers']
+        servers = self.db_query('servers')
         device = Device(self.logger)
-        try:
-            if not servers:
-                self.logger.info('no servers')
-                return
-            for server in local_db['servers']:
-                self.logger.debug(
-                    'forwaring ' + str(server['server_port']) + ' for ' + server['certname'])
-                device.open_port(server['server_port'],
-                                 'ShadowSocks ' + server['certname'])
+        if not servers:
+            self.logger.info('no servers')
             return
-        except Exception:
-            return
+        for server in servers:
+            self.logger.debug(
+                'forwaring ' + str(server['server_port']) + ' for ' + server['certname'])
+            device.open_port(server['server_port'],
+                             'ShadowSocks ' + server['certname'])
 
     def start(self):
         self.start_all()
@@ -285,14 +279,12 @@ class Shadow(Service):
             return "", ""
 
     def get_service_creds_summary(self, ip_address):
-        local_db = dataset.connect(
-            'sqlite:///' + self.config.get('shadow', 'db-path') + "?check_same_thread=False")
-        servers = local_db['servers']
+        servers = self.db_query('servers')
         creds = {}
         if not servers or not self.is_enabled():
             self.logger.debug("No servers found for access creds")
             return {}
-        for server in local_db['servers']:
+        for server in servers:
             if server['certname'] == "''" or not server['certname']:
                 self.logger.error("Certname is empty, skipping")
                 continue
@@ -317,9 +309,6 @@ class Shadow(Service):
         return response
 
     def get_access_link(self, cname):
-        local_db = dataset.connect(
-            'sqlite:///' + self.config.get('shadow', 'db-path') +
-            "?check_same_thread=False")
         ipw = IPW()
         ip_address = shlex.quote(ipw.myip())
         if self.config.has_section("dyndns") and self.config.getboolean('dyndns', 'enabled'):
@@ -327,8 +316,10 @@ class Shadow(Service):
             server_address = self.config.get("dyndns", "hostname")
         else:
             server_address = ip_address
-        servers = local_db['servers']
-        server = servers.find_one(certname=cname)
+
+        table = self.db_query('servers', return_table=True)
+        server = table.find_one(certname=cname) if table else None
+
         uri64 = "empty"
         digest = ""
         link = None
@@ -337,7 +328,6 @@ class Shadow(Service):
                 server['password'], server_address, server['server_port'], server['certname'])
             link = "{\"type\":\"shadowsocks\", \"link\":\"" \
                 + uri64 + "\", \"digest\": \"" + str(digest) + "\" }"
-        local_db.close()
         return link
 
     def get_usage_status_summary(self):
@@ -350,10 +340,8 @@ class Shadow(Service):
 
     # TODO: this needs to be split, so above calls are not redundant
     def get_usage_status_and_deltas(self, clear_counters=False):
-        self.logger.debug("---summary -----")
-        local_db = dataset.connect(
-            'sqlite:///' + self.config.get('shadow', 'db-path') + "?check_same_thread=False")
-        servers = local_db['servers']
+        self.logger.debug("----- summary -----")
+        servers = self.db_query('servers')
         usage_results = {}
         usage_deltas = {}
         if not servers or not self.is_enabled():
@@ -366,11 +354,9 @@ class Shadow(Service):
         raw_str = str(self.sock.recv(1056)).replace(
             "b'stat:", "").replace("'", "")
         response = json.loads(raw_str)
-        usage_db = dataset.connect(
-            'sqlite:///' + self.config.get('shadow', 'db-path') + "?check_same_thread=False")
 
-        usage_servers = usage_db['servers']
-        usage_daily = usage_db['daily']
+        usage_servers_table = self.db_query('servers', return_table=True)
+        usage_daily_table = self.db_query('daily', return_table=True)
         usage_status = -1
         for server in servers:
             if server['certname'] == "''" or not server['certname']:
@@ -388,7 +374,7 @@ class Shadow(Service):
                     current_usage = response[server_name]
                     self.logger.debug("port=" + str(server['server_port']) +
                                       " usage=" + str(response[str(server['server_port'])]))
-                    usage_server = usage_servers.find_one(
+                    usage_server = usage_servers_table.find_one(
                         certname=server['certname'])
                 if usage_server is None or usage_server['usage'] is None or 'usage' not in usage_server:
                     # not yet in the database
@@ -427,17 +413,17 @@ class Shadow(Service):
                 ####################################################
 
                 today = datetime.today().strftime('%Y-%m-%d')
-                usage_today = usage_daily.find_one(
+                usage_today = usage_daily_table.find_one(
                     certname=server['certname'], date=today)
                 if usage_today is None:
                     self.logger.info("New day")
                     # this is a new day, start is 0
-                    usage_daily.upsert({'certname': server['certname'],
-                                        'date': today,
-                                        'start_usage': usage_value,
-                                        'server_port': server['server_port'],
-                                        'type': 'shadow',
-                                        'end_usage': usage_value}, ['certname', 'date'])
+                    usage_daily_table.upsert({'certname': server['certname'],
+                                              'date': today,
+                                              'start_usage': usage_value,
+                                              'server_port': server['server_port'],
+                                              'type': 'shadow',
+                                              'end_usage': usage_value}, ['certname', 'date'])
                 else:
                     # wrap around/restart has happened
                     if usage_today['end_usage'] < usage_value:
@@ -449,24 +435,24 @@ class Shadow(Service):
                         # we create a fake start that starts earlier, so that future end values
                         # can directly come from ShadowSocks socket.
                         fake_start = usage_value - past_delta
-                        usage_daily.upsert({'certname': server['certname'],
-                                            'date': today,
-                                            'server_port': server['server_port'],
-                                            'start_usage': fake_start,
-                                            'type': 'shadow',
-                                            'end_usage': usage_value}, ['certname', 'date'])
+                        usage_daily_table.upsert({'certname': server['certname'],
+                                                  'date': today,
+                                                  'server_port': server['server_port'],
+                                                  'start_usage': fake_start,
+                                                  'type': 'shadow',
+                                                  'end_usage': usage_value}, ['certname', 'date'])
                     else:
                         # all is normal, just update the end
-                        usage_daily.upsert({'certname': server['certname'],
-                                            'date': today,
-                                            'server_port': server['server_port'],
-                                            'type': 'shadow',
-                                            'end_usage': usage_value}, ['certname', 'date'])
+                        usage_daily_table.upsert({'certname': server['certname'],
+                                                  'date': today,
+                                                  'server_port': server['server_port'],
+                                                  'type': 'shadow',
+                                                  'end_usage': usage_value}, ['certname', 'date'])
                 # this one is for the overall usage, used for "usage status"
-                usage_servers.upsert({'certname': server['certname'],
-                                      'server_port': server['server_port'],
-                                      'usage': usage_value,
-                                      'status': usage_status}, ['certname'])
+                usage_servers_table.upsert({'certname': server['certname'],
+                                            'server_port': server['server_port'],
+                                            'usage': usage_value,
+                                            'status': usage_status}, ['certname'])
 
                 # append to the results of the current call
                 usage_results[server['certname']] = usage_status
@@ -476,18 +462,18 @@ class Shadow(Service):
         return usage_results, usage_deltas
 
     def get_usage_daily(self, day_date=None):
-        local_db = dataset.connect(
-            'sqlite:///' + self.config.get('shadow', 'db-path') + "?check_same_thread=False")
-        servers = local_db['servers']
-        usage_db = dataset.connect(
-            'sqlite:///' + self.config.get('shadow', 'db-path') + "?check_same_thread=False")
-        usage_daily = usage_db['daily']
+        servers = self.db_query('servers')
+        usage_daily_rows = self.db_query('daily')
         days = {}
+        if not servers or not usage_daily_rows:
+            return {}
+
         for server in servers:
             if day_date is None:
-                usage_days = usage_daily.find(certname=server['certname'])
+                usage_days = [r for r in usage_daily_rows if r['certname'] == server['certname']]
             else:
-                usage_days = usage_daily.find(certname=server['certname'], date=str(day_date))
+                usage_days = [r for r in usage_daily_rows if r['certname']
+                              == server['certname'] and r['date'] == str(day_date)]
             for day in usage_days:
                 try:
                     if day['end_usage'] == day['start_usage']:
@@ -519,17 +505,14 @@ class Shadow(Service):
                         "usage": use})
                 else:
                     days[day['certname']] = use
-        local_db.close()
         return days
 
     def get_short_link_text(self, cname, ip_address):
         uri64 = ""
         count = 0
         while count < 5:
-            local_db = dataset.connect(
-                'sqlite:///' + self.config.get('shadow', 'db-path') + "?check_same_thread=False")
-            servers = local_db['servers']
-            server = servers.find_one(certname=cname)
+            table = self.db_query('servers', return_table=True)
+            server = table.find_one(certname=cname) if table else None
             if server is not None:
                 uri64, digest = self.create_link_and_hash(
                     server['password'], ip_address, server['server_port'], server['certname'])
@@ -589,14 +572,12 @@ class Shadow(Service):
         return txt, html
 
     def get_max_port(self):
-        local_db = dataset.connect(
-            'sqlite:///' + self.config.get('shadow', 'db-path') + "?check_same_thread=False")
         # get max of assigned ports
         # if no entry in DB, copy from config default port start
         try:
-            results = local_db.query('select max(server_port) from servers')
-            row = list(results)[0]
-            max_port = row['max(server_port)']
+            results = self.db_query(query_str='select max(server_port) from servers')
+            row = results[0] if results else {}
+            max_port = row.get('max(server_port)')
         except:
             max_port = None
         if max_port is None:
@@ -615,14 +596,12 @@ class Shadow(Service):
 
     def recover_missing_servers(self):
         pid_missing = True
-        local_db = dataset.connect(
-            'sqlite:///' + self.config.get('shadow', 'db-path') + "?check_same_thread=False")
-        servers = local_db['servers']
+        servers = self.db_query('servers')
         if not servers:
             self.logger.debug('no servers for recovery')
             return True
         device = Device(self.logger)
-        for server in local_db['servers']:
+        for server in servers:
             self.logger.debug("recovery checking server:" + str(server['server_port']))
             pid_file_ = SHADOWSOCKS_FOLDER + '/.shadowsocks_' + \
                 str(server['server_port']) + '.pid'
@@ -650,9 +629,7 @@ class Shadow(Service):
                 self.logger.info("Database restored successfully in self_test.")
 
         local_port = 10000 + randrange(10)  # nosec: not used for cryptography
-        local_db = dataset.connect(
-            'sqlite:///' + self.config.get('shadow', 'db-path') + "?check_same_thread=False")
-        servers = local_db['servers']
+        servers = self.db_query('servers')
         if not servers:
             # if no entry in DB, just return true. No fail is a pass
             self.logger.info('no servers for self test')
@@ -678,7 +655,7 @@ class Shadow(Service):
                 return False
         except:
             return False
-        for server in local_db['servers']:
+        for server in servers:
             self.logger.debug("testing :" + str(server['server_port']))
             local_port += 1
             ss_client_cmd = "ss-local -s 127.0.0.1 -p {} -l {} -k {} -m {} ".format(
