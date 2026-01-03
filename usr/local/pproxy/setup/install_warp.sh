@@ -56,3 +56,6 @@ redsocks {
 EOF
 sudo systemctl start redsocks
 sudo systemctl enable redsocks # To start on boot
+# taskbar gets stuck, disable it
+systemctl --user stop warp-taskbar
+systemctl --user disable warp-taskbar
