@@ -150,9 +150,6 @@ class Services:
         usages = {}
         for service in self.services:
             usage = service['obj'].get_usage_status_summary()
-            import pprint
-            pprint.pprint(service)
-            pprint.pprint(usage)
             if bool(usage):   # check if there are any friends
                 usages.update(usage)
         return usages
