@@ -1,7 +1,6 @@
 from datetime import datetime
 from random import randrange  # nosec: not used for cryptography
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
-from sqlalchemy.exc import SQLAlchemyError
 import atexit
 import base64
 import dataset
@@ -189,11 +188,33 @@ class Shadow(Service):
     def start_all(self):
         # used at boot time
         # loop over cert files, start each
-        local_db = dataset.connect(
-            'sqlite:///' + self.config.get('shadow', 'db-path') + "?check_same_thread=False")
-        servers = local_db['servers']
-        if len(servers) == 0:
-            return
+        db_path = self.config.get('shadow', 'db-path')
+        try:
+            local_db = dataset.connect(
+                'sqlite:///' + db_path + "?check_same_thread=False")
+            servers = local_db['servers']
+            if len(servers) == 0:
+                return
+        except Exception as e:
+            self.logger.error(f"Error in start_all: {e}")
+            msg = str(e).lower()
+            if "malformed" in msg or "corrupt" in msg:
+                self.logger.warning(
+                    "Database corruption detected in start_all, attempting restore.")
+                if self.restore():
+                    try:
+                        local_db = dataset.connect(
+                            'sqlite:///' + db_path + "?check_same_thread=False")
+                        servers = local_db['servers']
+                    except Exception as e2:
+                        self.logger.error(f"Failed to reconnect after restore: {e2}")
+                        return
+                else:
+                    self.logger.error("Failed to restore database in start_all.")
+                    return
+            else:
+                return
+
         for server in local_db['servers']:
             time.sleep(1)
             self.start_server(server)
@@ -276,7 +297,8 @@ class Shadow(Service):
                 self.logger.error("Certname is empty, skipping")
                 continue
             self.logger.debug("creds for " + server['certname'])
-            link, hash_link = self.create_link_and_hash(server['password'], ip_address, server['server_port'], server['certname'])
+            link, hash_link = self.create_link_and_hash(
+                server['password'], ip_address, server['server_port'], server['certname'])
             creds[server['certname']] = hash_link
         return creds
 
@@ -311,7 +333,8 @@ class Shadow(Service):
         digest = ""
         link = None
         if server is not None:
-            uri64, digest = self.create_link_and_hash(server['password'], server_address, server['server_port'], server['certname'])
+            uri64, digest = self.create_link_and_hash(
+                server['password'], server_address, server['server_port'], server['certname'])
             link = "{\"type\":\"shadowsocks\", \"link\":\"" \
                 + uri64 + "\", \"digest\": \"" + str(digest) + "\" }"
         local_db.close()
@@ -380,7 +403,8 @@ class Shadow(Service):
                     # already has some value in usage db
                     if usage_server['usage'] > current_usage:
                         # wrap around, device recently rebooted?
-                        self.logger.debug(f"usage value has gone down!! {server['certname']} {current_usage} -- db: {usage_server['usage']}")
+                        self.logger.debug(
+                            f"usage value has gone down!! {server['certname']} {current_usage} -- db: {usage_server['usage']}")
                         usage_value = current_usage
                         # some of the data usage is lost, but we get the estimate
                         delta = current_usage
@@ -507,7 +531,8 @@ class Shadow(Service):
             servers = local_db['servers']
             server = servers.find_one(certname=cname)
             if server is not None:
-                uri64, digest = self.create_link_and_hash(server['password'], ip_address, server['server_port'], server['certname'])
+                uri64, digest = self.create_link_and_hash(
+                    server['password'], ip_address, server['server_port'], server['certname'])
                 return uri64
             else:
                 count += 1
@@ -525,9 +550,11 @@ class Shadow(Service):
                            '/usr/local/pproxy/ui/' + lang + '/potatso.png']
                 subject = "Your New VPN Access Details"
                 if not is_new_user:
-                    txt = "You have been granted access to a private VPN server (" + str(ip_address) + "). "
+                    txt = "You have been granted access to a private VPN server (" + str(
+                        ip_address) + "). "
                     txt += 'This VPN server uses Shadowsocks server. To start using this service:'
-                    html = "<h2>You have been granted access to a private VPN server (" + str(ip_address) + "). </h2>"
+                    html = "<h2>You have been granted access to a private VPN server (" + str(
+                        ip_address) + "). </h2>"
                     html += 'This VPN server uses Shadowsocks server. To start using this service, '
                 else:
                     txt = "Your access link to the private VPN server is updated. "
@@ -614,6 +641,14 @@ class Shadow(Service):
 
     def self_test(self):
         success = True
+        if self.corrupted_files():
+            self.logger.warning("Corruption detected in self_test, attempting restore.")
+            if not self.restore():
+                self.logger.error("Failed to restore database in self_test.")
+                return False
+            else:
+                self.logger.info("Database restored successfully in self_test.")
+
         local_port = 10000 + randrange(10)  # nosec: not used for cryptography
         local_db = dataset.connect(
             'sqlite:///' + self.config.get('shadow', 'db-path') + "?check_same_thread=False")
@@ -673,20 +708,35 @@ class Shadow(Service):
 
     def backup(self):
         result = True
+        db_path = self.config.get('shadow', 'db-path')
+        if self.corrupted_files():
+            self.logger.error("Skipping backup because database is corrupted.")
+            return False
         try:
-            shutil.copyfile(self.config.get('shadow', 'db-path'),
-                            self.config.get('shadow', 'db-path') + ".backup")
-        except:
+            shutil.copyfile(db_path, db_path + ".backup")
+            self.logger.debug("Database backup successful.")
+        except Exception:
             # TODO: handle permission error once permission recovery is set
             self.logger.exception("backup failed")
+            result = False
         return result
 
     def restore(self):
         result = True
+        db_path = self.config.get('shadow', 'db-path')
+        self.logger.info("Restoring database from backup...")
         try:
-            shutil.copyfile(self.config.get('shadow', 'db-path') + '.backup',
-                            self.config.get('shadow', 'db-path'))
-        except:
+            if os.path.isfile(db_path + '.backup'):
+                shutil.copyfile(db_path + '.backup', db_path)
+                self.logger.info("Database restoration successful.")
+                # Verify healthy after restore
+                if self.corrupted_files():
+                    self.logger.critical("Database still corrupted after restoration!")
+                    result = False
+            else:
+                self.logger.error("Backup file missing, cannot restore.")
+                result = False
+        except Exception:
             # TODO: handle permission error once permission recovery is set
             self.logger.exception("restore failed")
             result = False
@@ -694,29 +744,33 @@ class Shadow(Service):
 
     def corrupted_files(self):
         corruption_detected = False
+        db_path = self.config.get('shadow', 'db-path')
+        if not os.path.isfile(db_path):
+            return False
         try:
             local_db = dataset.connect(
-                'sqlite:///' + self.config.get('shadow', 'db-path') + "?check_same_thread=False")
+                'sqlite:///' + db_path + "?check_same_thread=False")
+            # Try a simple count to see if it triggers an exception
+            # This catches the "database disk image is malformed" error during execution
+            local_db['servers'].count()
+
             results = local_db.query('pragma integrity_check')
             integrity_check = list(results)
             for check in integrity_check:
-                for test, result in check.items():
-                    print(test + "=" + result)
+                for result in check.values():
                     # If the db is corrupted
                     if result != "ok":
                         corruption_detected = True
-                        # prints error
-                        print(result)
-                        # If db is malformed
-                        if result == 'database disk image is malformed':
-                            print("We are experiencing technical difficulties at the moment")
-                        # If the db is not malformed
-                        else:
-                            # Run application menu()
-                            print(result)
-        except SQLAlchemyError as e:
-            corruption_detected = True
-            print(e)
+                        self.logger.error(f"Integrity check failed: {result}")
+        except Exception as e:
+            msg = str(e).lower()
+            if "malformed" in msg or "corrupt" in msg:
+                corruption_detected = True
+                self.logger.error(f"Database corruption detected: {e}")
+            else:
+                # We don't necessarily want to mark it as corrupted for other errors (like lock)
+                # but for now we'll log it.
+                self.logger.debug(f"Non-corruption database error: {e}")
         return corruption_detected
 
     def db_changed(self):
@@ -734,12 +788,11 @@ class Shadow(Service):
 
     def backup_restore(self):
         result = True
-        if False:
-            if self.corrupted_files():
-                result = self.restore()
-            else:
-                if self.db_changed():
-                    result = self.backup()
+        if self.corrupted_files():
+            result = self.restore()
+        else:
+            if self.db_changed():
+                result = self.backup()
         return result
 
     def get_start_port(self):

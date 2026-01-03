@@ -19,7 +19,8 @@ def pytest_configure(config):
         'adafruit_rgb_display.st7789', 'board', 'digitalio', 'busio',
         'pystemd', 'pystemd.systemd1', 'distro', 'netifaces', 'psutil',
         'upnpclient', 'packaging', 'packaging.version', 'qrcode',
-        'sqlalchemy', 'sqlalchemy.exc', 'dataset', 'sanitize_filename'
+        'sqlalchemy', 'sqlalchemy.exc', 'dataset', 'sanitize_filename',
+        'getmac'
     ]
 
     all_mocks = pil_mocks + hardware_mocks
