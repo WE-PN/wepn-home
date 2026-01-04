@@ -102,7 +102,7 @@ class Unbounded(Service):
             cmd = " 1 24 unbounded"
         result, err, failed, sp = device.execute_cmd_output(SRUN + cmd)
         try:
-            bits = int(result.decode("utf-8").strip())
+            bits = int(result.decode("utf-8").strip()) * 8
         except:
             bits = 0
         return {"unbounded": bits}
