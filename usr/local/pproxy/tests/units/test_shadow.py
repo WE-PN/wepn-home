@@ -291,7 +291,8 @@ class TestShadow(unittest.TestCase):
         self.shadow_service.cleanup()
         mock_clear.assert_called_once()
 
-    def test_clear_handles_exception(self):
+    @patch('shadow.os.path.isfile', return_value=True)
+    def test_clear_handles_exception(self, mock_isfile):
         self.shadow_service.sock = MagicMock()
         self.shadow_service.sock.shutdown.side_effect = Exception("error")
         self.shadow_service.clear()
