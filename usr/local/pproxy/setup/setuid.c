@@ -92,8 +92,8 @@ int main(int argc, char * argv[])
 	scommands[21]= "/usr/bin/wg-quick down wg0";
 	scommands[22]= "/usr/bin/wg-quick up wg0";
 	scommands[23]= "/usr/local/sbin/limit_bandwidth.sh %s %s %s %s";
-	scommands[24]= "/usr/sbin/iptables -t mangle -L OUTPUT -v -x  -m owner --uid-owner \"`id -u %s`\" | grep \"wepn-bw\" | awk '{print $2}'";
-	scommands[25]= "/usr/sbin/iptables -t mangle -L OUTPUT -v -x -Z -m owner --uid-owner \"`id -u %s`\" | grep \"wepn-bw\" | awk '{print $2}'";
+	scommands[24]= "/usr/local/sbin/limit_bandwidth.sh get %s %s";
+	scommands[25]= "/usr/local/sbin/limit_bandwidth.sh clear %s %s";
 	scommands[26]= "/usr/bin/apt-get -y -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confnew\" -f install wepn-unbounded";
 
 	int c,s,t;
@@ -224,16 +224,18 @@ int main(int argc, char * argv[])
 		}
 		else if (s == 24 || s == 25) {
 			// 24 just gets the usage from iptables mangle rule
-			// 25 also resets the counter
-			if (argc != 4) {
-				printf("Missing params: username \n");
+			// 25 resets the counter
+			if (argc != 5) {
+				printf("Missing params: username device\n");
 				return(-1);
 			}
 
 			// username
 			sanitize(argv[3]);
+			// device
+			sanitize(argv[4]);
 
-			sprintf(cmd, scommands[s], argv[3]);
+			sprintf(cmd, scommands[s], argv[3], argv[4]);
 		}
 		else if (s == 7 || s == 16) {
 			// spcial commands that takes in arguments

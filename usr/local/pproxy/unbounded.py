@@ -91,18 +91,26 @@ class Unbounded(Service):
         self.recover_missing_servers()
         return
 
-    def get_usage_status_summary(self, clear_counters=False):
+    def get_usage_status_summary(self):
         return {"unbounded": 1}
+
+    def clear_usage_counters(self, device=None):
+        if device is None:
+            device = Device(self.logger)
+        iface = str(self.config.get('hw', 'iface'))
+        cmd = " 1 25 unbounded " + iface
+        result, err, failed, sp = device.execute_cmd_output(SRUN + cmd)
+        return err
 
     def get_usage_deltas(self, clear_counters=False):
         device = Device(self.logger)
-        if clear_counters:
-            cmd = " 1 25 unbounded"
-        else:
-            cmd = " 1 24 unbounded"
-        result, err, failed, sp = device.execute_cmd_output(SRUN + cmd)
+        iface = str(self.config.get('hw', 'iface'))
+        cmd = " 1 24 unbounded " + iface
         try:
+            result, err, failed, sp = device.execute_cmd_output(SRUN + cmd)
             bits = int(result.decode("utf-8").strip()) * 8
+            if clear_counters:
+                self.clear_usage_counters(device)
         except:
             bits = 0
         return {"unbounded": bits}

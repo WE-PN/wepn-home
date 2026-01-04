@@ -57,9 +57,11 @@ if [[ $EUID -ne 0 ]]; then
    exit 1
 fi
 
-if [ "$ACTION" != "set" ] && [ "$ACTION" != "remove" ]; then
+if [ "$ACTION" != "set" ] && [ "$ACTION" != "remove" ] && [ "$ACTION" != "clear" ] && [ "$ACTION" != "get" ]; then
     echo "Usage: sudo $0 <set|remove> <username> <interface> [rate]"
     echo "Example (set): sudo $0 set myuser eth0 1mbit"
+    echo "Example (get): sudo $0 get myuser eth0"
+    echo "Example (clear): sudo $0 clear myuser eth0"
     echo "Example (remove): sudo $0 remove myuser eth0"
     exit 1
 fi
@@ -81,6 +83,8 @@ if [ -z "$USER_UID" ]; then
     log_error "User '$USERNAME' not found."
     exit 1
 fi
+# overwrite mark so it matches the UID
+IPTABLES_MARK=${USER_UID}
 
 # --- Validate Interface ---
 if ! ip link show "$INTERFACE" > /dev/null 2>&1; then
@@ -226,6 +230,16 @@ elif [ "$ACTION" == "remove" ]; then
     echo "  sudo tc class show dev $INTERFACE"
     echo "  sudo tc filter show dev $INTERFACE"
     echo "  sudo iptables -t mangle -L OUTPUT -v -n"
+elif [ "$ACTION" == "get" ]; then
+	sudo /usr/sbin/iptables -t mangle -L OUTPUT -v  -x --line-numbers -n | grep "owner UID match ${USER_UID}" | awk '{print $3}'
+elif [ "$ACTION" == "clear" ]; then
+	LINE_NO=`sudo /usr/sbin/iptables -t mangle -L OUTPUT -v  -x --line-numbers -n | grep "owner UID match ${USER_UID}" | awk '{print $1}'`
+	if [ -z "${LINE_NO}" ]; then
+		log_info "No limit found"
+		exit 1
+	else
+		sudo /usr/sbin/iptables -t mangle -Z OUTPUT ${LINE_NO}
+	fi
 fi
 
 exit 0
