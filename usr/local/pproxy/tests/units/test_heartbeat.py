@@ -29,6 +29,7 @@ def mock_dependencies():
     with patch('heartbeat.WStatus') as mock_wstatus, \
             patch('heartbeat.WPDiag') as mock_wpdiag, \
             patch('heartbeat.Services') as mock_services, \
+            patch('heartbeat.Measurement') as mock_measurement, \
             patch('heartbeat.MetricsClient') as mock_metrics, \
             patch('heartbeat.configparser.ConfigParser') as mock_config_parser, \
             patch('heartbeat.IPW') as mock_ipw, \
@@ -80,6 +81,7 @@ def mock_dependencies():
             'wstatus': mock_wstatus,
             'wpdiag': mock_wpdiag,
             'services': mock_services,
+            'measurement': mock_measurement,
             'metrics': mock_metrics,
             'config': mock_config,
             'ipw': mock_ipw,
@@ -217,6 +219,17 @@ def test_send_measurements_too_soon(heartbeat, mock_dependencies):
 
         mock_dependencies['requests'].post.assert_not_called()
 
+def test_send_measurements_config_disabled(heartbeat, mock_dependencies):
+    with patch('heartbeat.datetime') as mock_datetime:
+        mock_datetime.now.return_value.timestamp.return_value = 1000
+        mock_dependencies['wstatus'].return_value.status.has_option.return_value = True
+        mock_dependencies['wstatus'].return_value.status.getint.return_value = 1000 - \
+            (METRICS_REPORT_INTERVAL_SECONDS - 10)
+        mock_dependencies['measurement'].return_value.get_overlayable_config_value.return_value = False
+
+        heartbeat.send_measurements()
+
+        mock_dependencies['requests'].post.assert_not_called()
 
 def test_send_measurements_success(heartbeat, mock_dependencies):
     with patch('heartbeat.datetime') as mock_datetime:
@@ -224,6 +237,7 @@ def test_send_measurements_success(heartbeat, mock_dependencies):
         mock_dependencies['wstatus'].return_value.status.has_option.return_value = True
         mock_dependencies['wstatus'].return_value.status.getint.return_value = 1000
         mock_dependencies['metrics'].return_value.get_report.return_value = {}
+        mock_dependencies['measurement'].return_value.get_overlayable_config_value.return_value = True
 
         heartbeat.send_measurements()
 

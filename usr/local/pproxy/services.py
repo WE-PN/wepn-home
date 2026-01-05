@@ -2,6 +2,7 @@ import json
 import re
 from sanitize_filename import sanitize
 
+from measurement import Measurement
 from networking import Networking
 from ooni import OONI
 from openvpn import OpenVPN
@@ -27,15 +28,16 @@ class Services:
         self.config = configparser.ConfigParser()
         self.config.read(CONFIG_FILE)
         self.services = []
+        self.services.append({'name': 'measurement', 'obj': Measurement(logger)})
         self.services.append({'name': 'networking', 'obj': Networking(logger)})
         self.services.append({'name': 'ooni', 'obj': OONI(logger)})
         self.services.append({'name': 'openvpn', 'obj': OpenVPN(logger)})
         self.services.append({'name': 'shadowsocks', 'obj': Shadow(logger)})
         self.services.append({'name': 'ssh', 'obj': SSH(logger)})
         self.services.append({'name': 'tor', 'obj': Tor(logger)})
+        self.services.append({'name': 'unbounded', 'obj': Unbounded(logger)})
         self.services.append({'name': 'wifi', 'obj': WiFi(logger)})
         self.services.append({'name': 'wireguard', 'obj': Wireguard(logger)})
-        self.services.append({'name': 'unbounded', 'obj': Unbounded(logger)})
         self.logger = logger
         path = SERVICE_FILE_BASE + "/services.ini"
         self.service_config = WStatus(logger, source_file=path)
@@ -218,10 +220,15 @@ class Services:
 
         for service_config in config_json["services"]:
             service_name = service_config["name"].lower()
+            found = False
             for service in self.services:
-                self.logger.debug(f"applying configuration to {service_name}")
                 if service['name'] == service_name:
+                    self.logger.debug(f"applying configuration to {service_name}")
                     service['obj'].configure(service_config["settings"])
+                    found = True
+            if not found:
+                self.logger.error(f"{service_name} was not found in services. Not implemented?")
+
         try:
             self.save_server_config_version(config_json["config_version"])
         except:

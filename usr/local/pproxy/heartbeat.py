@@ -8,6 +8,7 @@ from device import Device
 from diag import WPDiag
 from ipw import IPW
 from lcd import LCD as LCD
+from measurement import Measurement
 from services import Services
 from shadow import Shadow
 from wstatus import WStatus
@@ -226,6 +227,10 @@ class HeartBeat:
 
     # send measurement metrics to backend
     def send_measurements(self):
+        measurement_service = Measurement(self.logger)
+        if not measurement_service.get_overlayable_config_value('enabled', False):
+            self.logger.debug("Measurements are not enabled")
+            return
         timestamp = int(round(datetime.now().timestamp()))
         if not self.status.status.has_option("status", "last_measurement_send_timestamp"):
             self.logger.debug("no timestamp for the start of measurement, just save ts now")
