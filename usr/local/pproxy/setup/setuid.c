@@ -252,11 +252,7 @@ int main(int argc, char * argv[])
 				sanitize(argv[3]);
 				sprintf(cmd, scommands[s], argv[3]);
 			}
-		}
-		else if (s == 26 || s == 27 || s == 28) {
-			sprintf(cmd, "%s", scommands[s]);
 		} else {
-			sanitize(argv[3]);
 			sprintf(cmd, "%s", scommands[s]);
 		}
 	}
