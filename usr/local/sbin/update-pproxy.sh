@@ -12,7 +12,7 @@ chown root:root $LOG
 date > /var/local/pproxy/last-update 2>&1
 date > $LOG 2>&1
 
-/usr/bin/dpkg --configure -a >> $LOG 2>&1
+/usr/bin/dpkg --configure -a --force-confdef --force-confold >> $LOG 2>&1
 
 /usr/bin/apt-get update >> $LOG 2>&1
 /usr/bin/apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" -f install $PKG >> $LOG 2>&1
