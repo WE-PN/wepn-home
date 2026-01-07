@@ -6,7 +6,7 @@
 //#define DEBUG
 #define SRV_CNT 7
 #define CMD_CNT 6
-#define SPECIAL_CMD_CNT 27
+#define SPECIAL_CMD_CNT 29
 
 char* _sanitize(char input[], short type) {
 	static char ok_chars[] = "abcdefghijklmnopqrstuvwxyz"
@@ -95,6 +95,8 @@ int main(int argc, char * argv[])
 	scommands[24]= "/usr/local/sbin/limit_bandwidth.sh get %s %s";
 	scommands[25]= "/usr/local/sbin/limit_bandwidth.sh clear %s %s";
 	scommands[26]= "/usr/bin/apt-get -y -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confnew\" -f install wepn-unbounded";
+	scommands[27]= "/usr/bin/apt-get -y -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confnew\" -f install cloudflare-warp";
+	scommands[28]= "/usr/bin/apt-get -y -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confnew\" -f install redsocks";
 
 	int c,s,t;
 
@@ -251,7 +253,7 @@ int main(int argc, char * argv[])
 				sprintf(cmd, scommands[s], argv[3]);
 			}
 		}
-		else if (s == 26) {
+		else if (s == 26 || s == 27 || s == 28) {
 			sprintf(cmd, "%s", scommands[s]);
 		} else {
 			sanitize(argv[3]);

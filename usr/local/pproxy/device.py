@@ -226,12 +226,21 @@ class Device():
         cmd = "1 4"
         self.execute_setuid(cmd)
 
-    def install_pacakge(self, package_name="unbounded"):
+    def install_package(self, package_name="unbounded"):
         # ideally this should be an allowlist and a more dynamic structure
         # but for now, hard coding unbounded to avoid security concerns
-        if package_name == "unbounded":
-            cmd = "1 26"
-            self.execute_setuid(cmd)
+        match package_name:
+            case "unbounded":
+                pkg_no = "26"
+            case "warp":
+                pkg_no = "27"
+            case "redsocks":
+                pkg_no = "28"
+            case _:
+                self.logger.error(f"install for {package_name} failed, not in list")
+                return
+        cmd = "1 " + pkg_no
+        self.execute_setuid(cmd)
 
     def get_safe_skipping_start_date(self):
         # make sure a str is not returned when not set
