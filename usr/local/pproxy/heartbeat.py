@@ -165,6 +165,14 @@ class HeartBeat:
             status = int(self.status.get('state'))
         access_creds = self.services.get_service_creds_summary(external_ip)
         usage_status = self.services.get_usage_status_summary()
+        # TODO: this part needs to be removed once the new /usage/ infra is stable
+        # we do send the measurements to that api, and that flow is controllable by user
+        usage_deltas = self.services.get_usage_deltas(clear_counters=True)
+        try:
+            usage_countries = self.metrics.get_report()
+        except:
+            usage_countries = {}
+        # end of TODO
         try:
             with open('local_server/wepn-local.sig') as f:
                 # this signature is updated every time
@@ -197,6 +205,8 @@ class HeartBeat:
             "diag_code": diag_code,
             "access_cred": access_creds,
             "usage_status": usage_status,
+            "usage_deltas": usage_deltas,
+            "usage_countries": usage_countries,
             "public_key": signature,
             "sys_info": sys_info,
             "log": logs,
