@@ -175,6 +175,7 @@ def test_send_heartbeat_success(heartbeat, mock_dependencies):
     # Ensure get returns string for all keys needed
 
     mock_dependencies['wpdiag'].return_value.get_error_code.return_value = HEALTHY_DIAG_CODE
+    mock_dependencies['metrics'].return_value.get_report.return_value = {}
 
     heartbeat.send_heartbeat(lcd_print=False)
 
@@ -188,6 +189,7 @@ def test_send_heartbeat_success(heartbeat, mock_dependencies):
 def test_send_heartbeat_warming(heartbeat, mock_dependencies):
     mock_dependencies['wstatus'].return_value.get.side_effect = lambda k: "10" if k == "hb_to_warm" else "2"
     mock_dependencies['wpdiag'].return_value.get_error_code.return_value = 999  # Not healthy
+    mock_dependencies['metrics'].return_value.get_report.return_value = {}
 
     heartbeat.send_heartbeat()
 
@@ -202,6 +204,7 @@ def test_send_heartbeat_lcd_update(heartbeat, mock_dependencies):
     # It does by default fixture
     mock_dependencies['lcd'].return_value.version = 1
     mock_dependencies['lcd'].return_value.get_status_icons.return_value = ("icons", False)
+    mock_dependencies['metrics'].return_value.get_report.return_value = {}
 
     heartbeat.send_heartbeat(lcd_print=True)
 

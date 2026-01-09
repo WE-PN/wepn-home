@@ -167,7 +167,7 @@ class HeartBeat:
         usage_status = self.services.get_usage_status_summary()
         # TODO: this part needs to be removed once the new /usage/ infra is stable
         # we do send the measurements to that api, and that flow is controllable by user
-        usage_deltas = self.services.get_usage_deltas(clear_counters=True)
+        usage_deltas = self.services.get_usage_deltas(clear_counters=False)
         try:
             usage_countries = self.metrics.get_report()
         except:
