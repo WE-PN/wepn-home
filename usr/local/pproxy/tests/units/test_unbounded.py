@@ -82,6 +82,8 @@ class TestUnbounded(unittest.TestCase):
     @patch('unbounded.Device')
     def test_start_all(self, MockDevice):
         mock_dev = MockDevice.return_value
+        self.ub.config = MagicMock()
+        self.ub.config.get.return_value = "eth0"
         with patch.object(self.ub, 'get_limit', return_value="28kbit"):
             self.ub.start_all()
 

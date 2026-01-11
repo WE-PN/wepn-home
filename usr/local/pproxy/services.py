@@ -238,6 +238,14 @@ class Services:
         for service in self.services:
             service['obj'].apply_time_limit()
 
+    def apply_bandwidth_limit(self):
+        for service in self.services:
+            service['obj'].apply_bandwidth_limit()
+
+    def apply_limits(self):
+        for service in self.services:
+            service['obj'].apply_limits()
+
     def get_config_string(self, version=None):
         if version is None:
             version = self.get_saved_server_config_version()

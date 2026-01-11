@@ -45,8 +45,7 @@ class Unbounded(Service):
 
     def start_all(self):
         device = Device(self.logger)
-        # apply the bandwidth limit
-        device.execute_setuid(f"1 23 set unbounded eth0 {self.get_limit()}")
+        self.apply_bandwidth_limit()
         # start the wepn-unbounded service
         device.execute_setuid("0 6 1")
 
@@ -68,6 +67,14 @@ class Unbounded(Service):
 
     def reload(self):
         return
+
+    def apply_bandwidth_limit(self):
+        device = Device(self.logger)
+        # applying the limit will clear old rules, which will reset counters
+        # so we apply them only if rule is not already present
+        # TODO: cover case where the limit is changed
+        if not self.is_limit_rule_present(device):
+            device.execute_setuid(f"1 23 set unbounded eth0 {self.get_limit()}")
 
     def self_test(self):
         # TODO: some good testing is really needed here
@@ -102,15 +109,24 @@ class Unbounded(Service):
         result, err, failed, sp = device.execute_cmd_output(SRUN + cmd)
         return err
 
-    def get_usage_deltas(self, clear_counters=False):
-        device = Device(self.logger)
+    def is_limit_rule_present(self, device=None):
+        return (self.get_usage_bits(device) != -1)
+
+    def get_usage_bits(self, device=None):
+        if device is None:
+            device = Device(self.logger)
         iface = str(self.config.get('hw', 'iface'))
         cmd = " 1 24 unbounded " + iface
         try:
             result, err, failed, sp = device.execute_cmd_output(SRUN + cmd)
             bits = int(result.decode("utf-8").strip()) * 8
-            if clear_counters:
-                self.clear_usage_counters(device)
         except:
-            bits = 0
+            bits = -1
+        return bits
+
+    def get_usage_deltas(self, clear_counters=False):
+        device = Device(self.logger)
+        bits = max(self.get_usage_bits(device), 0)
+        if clear_counters:
+            self.clear_usage_counters(device)
         return {"unbounded": bits}

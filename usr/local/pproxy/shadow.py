@@ -756,12 +756,15 @@ class Shadow(Service):
 
         conn = sqli.connect(current)
         conn.execute("ATTACH ? AS backup", [backup])
-
-        res1 = conn.execute("""SELECT * FROM main.servers
-                               WHERE certname NOT IN
-                                 (SELECT certname FROM backup.servers)
-                            """).fetchall()
-        return (len(res1) > 0)
+        try:
+            res1 = conn.execute("""SELECT * FROM main.servers
+                                   WHERE certname NOT IN
+                                     (SELECT certname FROM backup.servers)
+                                """).fetchall()
+            return (len(res1) > 0)
+        except Exception:
+            self.logger.exception("Could not query db in db_changed")
+            return False
 
     def backup_restore(self):
         result = True

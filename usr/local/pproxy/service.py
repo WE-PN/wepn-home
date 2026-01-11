@@ -190,6 +190,13 @@ class Service:
                 self.logger.debug(f"apply_time_limit turning on {self.name}")
                 self.start()
 
+    def apply_bandwidth_limit(self):
+        pass
+
+    def apply_limits(self):
+        self.apply_time_limit()
+        self.apply_bandwidth_limit()
+
     def get_config_settings(self):
         settings_json = {
             "name": self.name,

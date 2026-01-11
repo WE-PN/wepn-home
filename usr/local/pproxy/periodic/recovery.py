@@ -22,7 +22,7 @@ device = Device(logger)
 services = Services(logger)
 services.backup_restore()
 services.recover_missing_servers()
-services.apply_time_limit()
+services.apply_limits()
 
 # if local API server is down, restart it
 url = "https://127.0.0.1:5000/"
