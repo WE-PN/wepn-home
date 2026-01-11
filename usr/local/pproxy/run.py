@@ -1,3 +1,4 @@
+from datetime import datetime
 from setup.onboard import OnBoard
 from shutil import copyfile
 import json
@@ -70,6 +71,10 @@ status = configparser.ConfigParser()
 status.read(STATUS_FILE)
 status['status']['booting'] = '1'
 status['status']['hb_to_warm'] = str(HEARTBEATS_TO_WARM)
+# set a fake "sent" timestamp, otherwise we have a large report period
+# if the device was powered down for a long time
+timestamp = int(round(datetime.now().timestamp()))
+status['status']['last_measurement_send_timestamp'] = str(timestamp)
 with open(STATUS_FILE, 'w') as statusfile:
     status.write(statusfile)
 
