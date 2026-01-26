@@ -190,7 +190,7 @@ class LEDClient:
                   str(wait))
 
 
-if __name__ == '__main__':
+def main():
     # add test cased for (1) enable and disable (2) set brightness
     lc = LEDClient()
     lc.set_enabled(True)
@@ -261,3 +261,7 @@ if __name__ == '__main__':
     lc.rainbow(3, 5)
     time.sleep(2)
     lc.blank()
+
+
+if __name__ == '__main__':
+    main()
