@@ -88,6 +88,18 @@ def util_iterate_apis(state, local_token, expected_code, filter_auth=False):
     return result
 
 
+def wait_until(condition_func, timeout=90, interval=5):
+    """
+    Utility to poll for a condition to become true.
+    """
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        if condition_func():
+            return True
+        time.sleep(interval)
+    return False
+
+
 # making HTML output pretty
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_makereport(item, call):
@@ -327,15 +339,18 @@ def test_list_friends(state, test_cfg):
 
 
 @pytest.mark.dependency(depends=["test_add_friend"])
-@pytest.mark.flaky(retries=5, delay=75)
 def test_added_friend_in_local_db(pproxy_cfg):
     shadow_db = pproxy_cfg.get('shadow', 'db-path')
-    conn = sqlite3.connect(shadow_db)
-    cursor = conn.cursor()
-    cursor.execute('''SELECT * from servers where certname like "zxcvb" and language like "en"''')
-    result = cursor.fetchall()
-    conn.close()
-    assert (len(result) == 1)  # nosec: assert is a legit check for pytest
+
+    def check_db():
+        conn = sqlite3.connect(shadow_db)
+        cursor = conn.cursor()
+        cursor.execute('''SELECT * from servers where certname like "zxcvb" and language like "en"''')
+        result = cursor.fetchall()
+        conn.close()
+        return len(result) == 1
+
+    assert wait_until(check_db, timeout=120, interval=10)
 
 
 @pytest.mark.dependency(depends=["test_login", "test_claim", "test_heartbeat", "test_add_friend", "test_list_friends"])
@@ -439,18 +454,19 @@ def test_delete_friend(state, test_cfg):
 
 
 @pytest.mark.dependency(depends=["test_delete_friend"])
-@pytest.mark.flaky(retries=5, delay=75)
 def test_deleted_friend_in_local_db(pproxy_cfg):
-    # wait for server to send the command to device
-    time.sleep(5)
     # check local database to see if the friend was removed
     shadow_db = pproxy_cfg.get('shadow', 'db-path')
-    conn = sqlite3.connect(shadow_db)
-    cursor = conn.cursor()
-    cursor.execute('''SELECT * from servers where certname like "zxcvb" and language like "en"''')
-    result = cursor.fetchall()
-    conn.close()
-    assert (len(result) == 0)
+
+    def check_db_deleted():
+        conn = sqlite3.connect(shadow_db)
+        cursor = conn.cursor()
+        cursor.execute('''SELECT * from servers where certname like "zxcvb" and language like "en"''')
+        result = cursor.fetchall()
+        conn.close()
+        return len(result) == 0
+
+    assert wait_until(check_db_deleted, timeout=120, interval=10)
 
 
 @pytest.mark.dependency(depends=["test_delete_friend"])
