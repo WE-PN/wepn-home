@@ -22,7 +22,6 @@ import subprocess  # nosec shlex split used for sanitization go.we-pn.com/waiver
 import sys
 import time
 import upnpclient as upnp
-from urllib.parse import urlparse
 
 try:
     from configparser import configparser
@@ -514,16 +513,12 @@ class Device():
     def _update_dns_cloudflare(self, ip_address):
         config_url = self.config.get('dyndns', 'url', fallback="https://api.cloudflare.com")
 
-        # Extracting the base URL (scheme + host) from the config URL
-        p = urlparse(config_url)
-        base_url = f"{p.scheme}://{p.netloc}"
-
         zone_id = self.config.get('dyndns', 'zone_id', fallback="")
         record_id = self.config.get('dyndns', 'record_id', fallback="")
 
         if "{}" in config_url:
-            # If config_url is a template, format it with base_url, zone_id, and record_id
-            url = config_url.format(base_url, zone_id, record_id)
+            # If config_url is a template, format it with zone_id, and record_id
+            url = config_url.format(zone_id, record_id)
         else:
             # Otherwise, treat config_url as the base and append the standard path
             url = f"{config_url.rstrip('/')}/client/v4/zones/{zone_id}/dns_records/{record_id}"

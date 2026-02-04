@@ -41,7 +41,7 @@ def mock_config():
             if option == 'hostname':
                 return 'host'
             if option == 'url':
-                return 'http://url/{}/{}/{}'
+                return 'http://url/{}/{}'
             if option == 'serial_number':
                 return 'SN123'
             if option == 'device_key':
