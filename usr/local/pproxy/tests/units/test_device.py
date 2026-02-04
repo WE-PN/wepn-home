@@ -31,7 +31,7 @@ def mock_config():
         instance.getint.return_value = 0
         instance.getboolean.return_value = False
 
-        def get_side_effect(section, option):
+        def get_side_effect(section, option, **kwargs):
             if option == 'id':
                 return '123'
             if option == 'username':
@@ -41,13 +41,15 @@ def mock_config():
             if option == 'hostname':
                 return 'host'
             if option == 'url':
-                return 'http://url'
+                return 'http://url/{}/{}/{}'
             if option == 'serial_number':
                 return 'SN123'
             if option == 'device_key':
                 return 'DK123'
             if option == 'enabled':
                 return 'True'
+            if option == 'method' and kwargs.get('fallback') == 'ddns':
+                return 'ddns'
             return 'some_value'
         instance.get.side_effect = get_side_effect
         yield mock
@@ -289,9 +291,47 @@ class TestNetwork:
         mock_get.return_value.status_code = 200
         device_instance.update_dns("1.2.3.4")
         mock_get.assert_called()
-        mock_get.return_value.status_code = 202
-        mock_get.return_value.content = b'badauth'
-        device_instance.update_dns("1.2.3.4")
+
+        # Test Cloudflare path
+        with patch.object(device_instance, '_update_dns_cloudflare') as mock_cf:
+            device_instance.config.get.side_effect = None
+            device_instance.config.get.return_value = 'cloudflare'
+            device_instance.update_dns("1.2.3.4")
+            mock_cf.assert_called_once_with("1.2.3.4")
+
+    @patch('device.requests.put')
+    def test_update_dns_cloudflare(self, mock_put, device_instance):
+        mock_response = MagicMock()
+        mock_response.json.return_value = {'success': True}
+        mock_put.return_value = mock_response
+
+        device_instance._update_dns_cloudflare("1.2.3.4")
+        mock_put.assert_called()
+
+        # Test failure
+        mock_response.json.return_value = {'success': False, 'errors': 'some error'}
+        device_instance._update_dns_cloudflare("1.2.3.4")
+
+    @patch('device.requests.get')
+    def test_update_dns_ddns(self, mock_get, device_instance):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.content = b'good'
+        mock_get.return_value = mock_response
+
+        device_instance._update_dns_ddns("1.2.3.4")
+        mock_get.assert_called()
+
+        # Test error response
+        mock_response.status_code = 404
+        mock_response.content = b'badauth'
+        # mock_response.find (used in device.py) needs to be mocked on content or response?
+        # Actually it's r.find(key.encode('utf-8')) in device.py where r is requests response.
+        # Wait, requests response doesn't have .find(). It's probably r.content.find().
+        # Let's check device.py line 557: if r.find(key.encode('utf-8')) == 0:
+        # That's a bug in device.py! It should be r.content.find() or similar.
+        mock_get.return_value = mock_response
+        device_instance._update_dns_ddns("1.2.3.4")
 
 
 class TestCommands:

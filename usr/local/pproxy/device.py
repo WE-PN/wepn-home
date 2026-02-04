@@ -22,6 +22,7 @@ import subprocess  # nosec shlex split used for sanitization go.we-pn.com/waiver
 import sys
 import time
 import upnpclient as upnp
+from urllib.parse import urlparse
 
 try:
     from configparser import configparser
@@ -504,6 +505,50 @@ class Device():
             return
         if not self.config.getboolean('dyndns', 'enabled'):
             return
+        method = self.config.get('dyndns', 'method', fallback="ddns")
+        if method == "cloudflare":
+            self._update_dns_cloudflare(ip_address)
+        else:
+            self._update_dns_ddns(ip_address)
+
+    def _update_dns_cloudflare(self, ip_address):
+        config_url = self.config.get('dyndns', 'url', fallback="https://api.cloudflare.com")
+
+        # Extracting the base URL (scheme + host) from the config URL
+        p = urlparse(config_url)
+        base_url = f"{p.scheme}://{p.netloc}"
+
+        zone_id = self.config.get('dyndns', 'zone_id', fallback="")
+        record_id = self.config.get('dyndns', 'record_id', fallback="")
+
+        if "{}" in config_url:
+            # If config_url is a template, format it with base_url, zone_id, and record_id
+            url = config_url.format(base_url, zone_id, record_id)
+        else:
+            # Otherwise, treat config_url as the base and append the standard path
+            url = f"{config_url.rstrip('/')}/client/v4/zones/{zone_id}/dns_records/{record_id}"
+
+        headers = {
+            'Authorization': f"Bearer {self.config.get('dyndns', 'token', fallback='')}",
+            'Content-Type': 'application/json'
+        }
+        data = {
+            'type': "A",
+            'name': self.config.get('dyndns', 'hostname', fallback=""),
+            'content': ip_address,
+            'ttl': 3600,
+            'proxied': False
+        }
+        response = requests.put(url, headers=headers, data=json.dumps(data), timeout=GET_TIMEOUT)
+        response.raise_for_status()
+        result = response.json()
+
+        if result['success']:
+            print(f"Successfully updated record to {ip_address}")
+        else:
+            print(f"Failed to update record: {result['errors']}")
+
+    def _update_dns_ddns(self, ip_address):
         # NOIP code from https://github.com/quleuber/no-ip-updater/blob/master/no_ip_updater/noip.py
         messages = {
             "good": "[SUCCESS] Host updated sucsessfully.",
@@ -524,7 +569,7 @@ class Device():
             try:
                 for key in messages.keys():
                     message = messages[key]
-                    if r.find(key.encode('utf-8')) == 0:
+                    if r.content.find(key.encode('utf-8')) == 0:
                         self.logger.error(message)
             except AttributeError:
                 print(r.content)
@@ -577,8 +622,8 @@ class Device():
         except:
             arch = "arm64"
 
-        url = "https://repo.we-pn.com/debian/dists/" + dist + \
-            "/main/binary-" + arch + "/Packages"
+        url = ("https://repo.we-pn.com/debian/dists/" + dist +
+               "/main/binary-" + arch + "/Packages")
         try:
             resp = requests.get(url, timeout=GET_TIMEOUT)
             res = re.findall(r"Version: ((\d+)\.(\d+)\.(\d+)).*", resp.text)
@@ -596,10 +641,12 @@ class Device():
             self.status.set_field("software", "channel", new_channel)
             if new_channel == "prod":
                 cmd_sudo = SRUN + " 1 19"
-                self.execute_cmd_output(cmd_sudo, True)  # nosec static input (go.we-pn.com/waiver-1)
+                # nosec static input (go.we-pn.com/waiver-1)
+                self.execute_cmd_output(cmd_sudo, True)
             elif new_channel == "beta":
                 cmd_sudo = SRUN + " 1 18"
-                self.execute_cmd_output(cmd_sudo, True)  # nosec static input (go.we-pn.com/waiver-1)
+                # nosec static input (go.we-pn.com/waiver-1)
+                self.execute_cmd_output(cmd_sudo, True)
             return True
         else:
             return False
@@ -647,8 +694,8 @@ class Device():
             if use_latest:
                 # this will rewrite repo_pkg_version to latest instead of ota.json
                 self.get_repo_package_version()
-            if self.repo_pkg_version is not None \
-                    and version.parse(current) >= version.parse(self.repo_pkg_version):
+            if (self.repo_pkg_version is not None
+                    and version.parse(current) >= version.parse(self.repo_pkg_version)):
                 needs = False
             self.logger.debug("VERSION is " + str(current) +
                               " but needs " + str(self.repo_pkg_version))
@@ -995,7 +1042,8 @@ class Device():
         return Version(release) < Version("6.6.0")
 
     def get_device_config_backend(self):
-        url = self.config.get('django', 'url') + "/api/device/" + self.config.get('django', 'id') + "/"
+        url = (self.config.get('django', 'url') + "/api/device/" +
+               self.config.get('django', 'id') + "/")
         data = {
             "serial_number": self.config.get('django', 'serial_number'),
             "device_key": self.config.get('django', 'device_key'),
