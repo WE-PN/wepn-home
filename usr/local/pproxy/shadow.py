@@ -94,9 +94,8 @@ class Shadow(Service):
         self.start_server(new_server)
 
         table = self.db_query('servers', return_table=True)
-        if table:
-            table.upsert({'certname': cname, 'server_port': port, 'password': password, 'language': lang},
-                         ['certname'])
+        table.upsert({'certname': cname, 'server_port': port, 'password': password, 'language': lang},
+                     ['certname'])
 
         all_servers = self.db_query('servers')
         if all_servers:

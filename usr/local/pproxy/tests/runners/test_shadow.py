@@ -4,7 +4,7 @@ import sys
 from datetime import datetime
 import pprint
 
-up_dir = os.path.dirname(os.path.abspath(__file__)) + '/../'
+up_dir = os.path.dirname(os.path.abspath(__file__)) + '/../../'
 sys.path.append(up_dir)
 # above line is needed for following classes:
 from shadow import Shadow  # noqa E402 need up_dir first
