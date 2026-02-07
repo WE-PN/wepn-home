@@ -192,7 +192,7 @@ class HeartBeat:
             last_ts = timestamp
         hb_time_delta = timestamp - last_ts
         data = {
-            "time_detla": hb_time_delta,
+            "time_delta": hb_time_delta,
             "serial_number": self.config.get('django', 'serial_number'),
             "ip_address": external_ip,
             "status": str(status),
