@@ -512,6 +512,8 @@ class Device():
 
     def _update_dns_cloudflare(self, ip_address):
         config_url = self.config.get('dyndns', 'url', fallback="https://api.cloudflare.com")
+        if config_url.startswith("'") and config_url.endswith("'"):
+            config_url = config_url[1:-1]
 
         zone_id = self.config.get('dyndns', 'zone_id', fallback="")
         record_id = self.config.get('dyndns', 'record_id', fallback="")
@@ -555,7 +557,10 @@ class Device():
             "abuse": "[ERROR] Username is blocked due to abuse.",
             "911": "[ERROR] A fatal error on our side such as a database outage. Retry the update no sooner than 30 minutes"  # noqa: B950
         }
-        r = requests.get(self.config.get('dyndns', 'url').format(
+        url_template = self.config.get('dyndns', 'url')
+        if url_template.startswith("'") and url_template.endswith("'"):
+            url_template = url_template[1:-1]
+        r = requests.get(url_template.format(
             self.config.get('dyndns', 'username'),
             self.config.get('dyndns', 'password'),
             self.config.get('dyndns', 'hostname'), ip_address), timeout=GET_TIMEOUT)

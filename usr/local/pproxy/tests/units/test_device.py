@@ -333,6 +333,45 @@ class TestNetwork:
         mock_get.return_value = mock_response
         device_instance._update_dns_ddns("1.2.3.4")
 
+    @patch('device.requests.put')
+    def test_update_dns_strip_quotes(self, mock_put, device_instance):
+        # Test Cloudflare quote stripping
+        device_instance.config.get.side_effect = lambda section, option, fallback=None: {
+            ('dyndns', 'url'): "'https://api.cloudflare.com'",
+            ('dyndns', 'hostname'): 'example.com',
+            ('dyndns', 'zone_id'): 'z',
+            ('dyndns', 'record_id'): 'r',
+            ('dyndns', 'token'): 't'
+        }.get((section, option), fallback)
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = {'success': True}
+        mock_put.return_value = mock_response
+
+        device_instance._update_dns_cloudflare("1.2.3.4")
+        args, _ = mock_put.call_args
+        # Should not have quotes
+        assert args[0] == "https://api.cloudflare.com/client/v4/zones/z/dns_records/r"
+        assert not args[0].startswith("'")
+
+        # Test DDNS quote stripping
+        with patch('device.requests.get') as mock_get:
+            device_instance.config.get.side_effect = lambda section, option, fallback=None: {
+                ('dyndns', 'url'): "'https://dyn.com/upd?h={}&i={}'",
+                ('dyndns', 'hostname'): 'h',
+                ('dyndns', 'username'): 'u',
+                ('dyndns', 'password'): 'p'
+            }.get((section, option), fallback)
+
+            mock_get.return_value.status_code = 200
+            mock_get.return_value.content = b'good'
+
+            device_instance._update_dns_ddns("1.2.3.4")
+            args, _ = mock_get.call_args
+            # Verify URL doesn't have quotes
+            assert not args[0].startswith("'")
+            assert not args[0].endswith("'")
+
 
 class TestCommands:
     @patch('device.subprocess.Popen')
