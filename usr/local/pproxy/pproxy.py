@@ -207,7 +207,8 @@ class PProxy():
                 self.rest_not_pending_mqtt.append(id)
             self.logger.info(self.mqtt_pending_notifications)
             self.logger.info(self.rest_not_pending_mqtt)
-            th = Thread(target=self.on_message_handler, args=(message["message_body"], self.mqtt_lock))
+            th = Thread(target=self.on_message_handler, args=(
+                message["message_body"], self.mqtt_lock))
             th.start()
             self.messages.mark_msg_read(id)
             self.logger.info("message ID processed: " + str(id))
@@ -377,14 +378,16 @@ class PProxy():
                                                       self.get_server_public_address(),
                                                       self.get_tunnel_from_data(data))
             if short_link != "" and self.messages.e2ee_available():
-                self.messages.send_msg(short_link, cert_id=cname, secure=True, msg_type="response-access-link")
+                self.messages.send_msg(short_link, cert_id=cname, secure=True,
+                                       msg_type="response-access-link")
         elif (data['action'] == 'get-error-log'):
             cname = self.sanitize_str(data['cert_name'])
             err_log = self.device.get_error_logs()
             contents_bytes = err_log.encode('utf-8')
             compressed = zlib.compress(contents_bytes)
             c_base = base64.b64encode(compressed).decode('utf-8')
-            self.messages.send_msg(c_base, cert_id=cname, secure=True, msg_type="response-error-logs")
+            self.messages.send_msg(c_base, cert_id=cname, secure=True,
+                                   msg_type="response-error-logs")
         elif (data['action'] == 'show-e2ee-qrcode'):
             # This is useful for cases where the pod and the phone are somehow not able
             # to sync using local API, for example and isolated network.
@@ -471,7 +474,8 @@ class PProxy():
                 # alse send a message to the app via Messaging API
                 short_link = services.get_short_link_text(username, server_address, tunnel)
                 if short_link != "" and self.messages.e2ee_available():
-                    self.messages.send_msg(short_link, cert_id=username, secure=True, msg_type="user_added")
+                    self.messages.send_msg(short_link, cert_id=username,
+                                           secure=True, msg_type="user_added")
 
             except BaseException:
                 self.logger.exception("Unhandled exception adding friend")
@@ -514,7 +518,8 @@ class PProxy():
                                files_in=None,
                                unsubscribe_link=None)  # at this point, friend is removed from backend db
             # alse send a message to the app via Messaging API
-            self.messages.send_msg("deleted user " + str(username) + " from " + str(server_address), cert_id=username, secure=False, msg_type="user_deleted")
+            self.messages.send_msg("deleted user " + str(username) + " from " +
+                                   str(server_address), cert_id=username, secure=False, msg_type="user_deleted")
         elif (data['action'] == 'reboot_device'):
             self.save_state("3")
             self.device.reboot()
@@ -548,7 +553,9 @@ class PProxy():
                 self.config.write(configfile)
 
         elif (data['action'] == 'set_ddns'):
-            for item in ['enabled', 'hostname', 'url', 'username', 'password']:
+            allowed_params = ['enabled', 'hostname', 'url', 'username',
+                              'password', 'method', 'zone_id', 'record_id', 'token']
+            for item in allowed_params:
                 if (item in data):
                     self.config.set('dyndns', item,
                                     self.sanitize_str(data[item]))
