@@ -120,6 +120,7 @@ class HeartBeat:
 
     # send heartbeat. if lcd_print==1, update LCD
     def send_heartbeat(self, lcd_print=0):
+        self.logger.debug("============= starting gathering heartbeat ==============")
         try:
             # prevent the measurement timestamp getting overwritten
             # buffer it and write it back
@@ -237,6 +238,7 @@ class HeartBeat:
 
     # send measurement metrics to backend
     def send_measurements(self):
+        self.logger.debug("============= starting gathering measurements ==============")
         measurement_service = Measurement(self.logger)
         if not measurement_service.get_overlayable_config_value('enabled', False):
             self.logger.debug("Measurements are not enabled")

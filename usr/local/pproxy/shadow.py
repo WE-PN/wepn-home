@@ -339,7 +339,7 @@ class Shadow(Service):
 
     # TODO: this needs to be split, so above calls are not redundant
     def get_usage_status_and_deltas(self, use_periodic_table=False):
-        self.logger.debug("----- summary -----")
+        self.logger.debug("----- shadow summary -----")
         servers = self.db_query('servers')
         usage_results = {}
         usage_deltas = {}
@@ -392,12 +392,14 @@ class Shadow(Service):
                             f"usage value has gone down!! {server['certname']} {current_usage} -- db: {usage_server['usage']}")
                         usage_value = current_usage
                         # some of the data usage is lost, but we get the estimate
-                        delta = current_usage
+                        # convert from byte to bit as well
+                        delta = current_usage * 8
                     else:
                         # not a wrap around, just replace
                         usage_value = current_usage
                         # how many bytes used since last update
-                        delta = current_usage - usage_server['usage']
+                        # and then convert to bits from byte
+                        delta = (current_usage - usage_server['usage']) * 8
                 self.logger.debug("usage value = " + str(usage_value))
                 if usage_value > 0:
                     usage_status = 1
@@ -502,6 +504,7 @@ class Shadow(Service):
 
             except KeyError as e:
                 self.logger.error("Port not found in ping stats: " + str(e))
+            self.logger.debug("=========== end shadow summary =================")
         return usage_results, usage_deltas
 
     def get_usage_daily(self, day_date=None):
