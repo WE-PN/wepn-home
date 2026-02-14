@@ -16,7 +16,8 @@ class TestShadow(unittest.TestCase):
     def setUp(self):
         self.mock_logger = MagicMock()
         # Mocking Device and WPDiag used in Shadow.__init__
-        with patch('shadow.WPDiag'), patch('shadow.MetricsClient'), patch('shadow.Service.is_enabled', return_value=True):
+        with patch('shadow.WPDiag'), patch('shadow.MetricsClient'), patch('shadow.Service.is_enabled', return_value=True), \
+                patch('shadow.Shadow.start'):
             self.shadow_service = shadow.Shadow(self.mock_logger)
 
         # Setup common config mock
@@ -53,14 +54,16 @@ class TestShadow(unittest.TestCase):
 
     @patch('shadow.Shadow.corrupted_files', return_value=True)
     @patch('shadow.Shadow.restore', return_value=True)
-    def test_self_test_triggers_restore(self, mock_restore, mock_corrupted):
+    @patch('shadow.time.sleep')
+    def test_self_test_triggers_restore(self, mock_sleep, mock_restore, mock_corrupted):
         with patch('shadow.Device'), patch('shadow.requests.get') as mock_get:
             mock_get.return_value.status_code = 200
             self.shadow_service.self_test()
         mock_restore.assert_called_once()
 
     @patch('shadow.dataset.connect')
-    def test_start_all_triggers_restore_on_corruption(self, mock_connect):
+    @patch('shadow.time.sleep')
+    def test_start_all_triggers_restore_on_corruption(self, mock_sleep, mock_connect):
         mock_connect.side_effect = [
             Exception("database disk image is malformed"),
             MagicMock()
@@ -332,10 +335,15 @@ class TestShadow(unittest.TestCase):
 
     @patch('shadow.Shadow.corrupted_files', return_value=False)
     @patch('shadow.Shadow.db_query')
-    @patch('shadow.requests.get')
-    def test_self_test_success_loop(self, mock_requests, mock_db_query, mock_corrupted):
+    @patch('shadow.requests')
+    @patch('shadow.time.sleep')
+    def test_self_test_success_loop(self, mock_sleep, mock_requests, mock_db_query, mock_corrupted):
         mock_db_query.return_value = [{'certname': 'user1', 'server_port': 8001, 'password': 'pw'}]
-        mock_requests.return_value.status_code = 200
+        mock_requests.get.return_value.status_code = 200
+        # Ensure exceptions used in shadow.py are available on the mock
+        mock_requests.exceptions.SSLError = Exception
+        mock_requests.exceptions.ReadTimeout = Exception
+
         with patch('shadow.Device') as mock_device:
             mock_device.return_value.execute_cmd_output.return_value = (b'', b'', 0, MagicMock())
             self.assertTrue(self.shadow_service.self_test())
@@ -363,6 +371,204 @@ class TestShadow(unittest.TestCase):
     def test_db_query_returns_db_if_no_args(self, mock_connect):
         mock_connect.return_value = 'db'
         self.assertEqual(self.shadow_service.db_query(), 'db')
+
+    @patch('shadow.Shadow.db_query')
+    def test_get_usage_status_and_deltas_new_user(self, mock_db_query):
+        """Test case where user is not in usage DB yet."""
+        # Setup mocks
+        mock_servers_table = MagicMock()
+        mock_daily_table = MagicMock()
+
+        # Mocks for db_query sequence:
+        # 1. servers (list of servers)
+        # 2. servers (table to find usage)
+        # 3. daily (table for daily stats)
+        server_info = {'certname': 'user1', 'server_port': 8001}
+        mock_db_query.side_effect = [
+            [server_info],      # 1. servers list
+            mock_servers_table,  # 2. usage_servers_table
+            mock_daily_table    # 3. usage_daily_table
+        ]
+
+        # Mock socket response with DOUBLE quotes for JSON keys
+        self.shadow_service.sock = MagicMock()
+        self.shadow_service.sock.recv.return_value = b'stat: {"8001": 100}'
+
+        # Mock Find in usage table - returns None (New user)
+        mock_servers_table.find_one.return_value = None
+
+        # Mock Find in daily table - returns None (New Day/User)
+        mock_daily_table.find_one.return_value = None
+
+        with patch('shadow.datetime') as mock_date:
+            mock_date.today.return_value.strftime.return_value = '2026-01-01'
+
+            # Execute
+            results, deltas = self.shadow_service.get_usage_status_and_deltas()
+
+            # Assertions
+            self.assertEqual(deltas['user1'], 100)  # Delta should be full usage
+
+            # Verify upserts
+            # Daily upsert for new day
+            mock_daily_table.upsert.assert_called()
+            call_args = mock_daily_table.upsert.call_args_list[0][0][0]
+            self.assertEqual(call_args['start_usage'], 100)
+            self.assertEqual(call_args['end_usage'], 100)
+
+            # Usage table upsert
+            mock_servers_table.upsert.assert_called()
+            call_args_usage = mock_servers_table.upsert.call_args[0][0]
+            self.assertEqual(call_args_usage['usage'], 100)
+
+    @patch('shadow.Shadow.db_query')
+    def test_get_usage_status_and_deltas_normal_increase(self, mock_db_query):
+        """Test case where usage increases normally."""
+        mock_servers_table = MagicMock()
+        mock_daily_table = MagicMock()
+
+        server_info = {'certname': 'user1', 'server_port': 8001}
+        mock_db_query.side_effect = [
+            [server_info],
+            mock_servers_table,
+            mock_daily_table
+        ]
+
+        self.shadow_service.sock = MagicMock()
+        # Current usage 200 > Previous 100
+        self.shadow_service.sock.recv.return_value = b'stat: {"8001": 200}'
+
+        # Previous usage in DB was 100
+        mock_servers_table.find_one.return_value = {
+            'certname': 'user1', 'usage': 100
+        }
+
+        # Daily record exists
+        mock_daily_table.find_one.return_value = {
+            'certname': 'user1',
+            'date': '2026-01-01',
+            'start_usage': 50,
+            'end_usage': 100
+        }
+
+        with patch('shadow.datetime') as mock_date:
+            mock_date.today.return_value.strftime.return_value = '2026-01-01'
+
+            results, deltas = self.shadow_service.get_usage_status_and_deltas()
+
+            self.assertEqual(deltas['user1'], 100)  # 200 - 100 = 100 delta
+
+            # Verify upserts
+            mock_daily_table.upsert.assert_called()
+            call_args = mock_daily_table.upsert.call_args[0][0]
+
+            # usage_value = 200
+            # past_delta = 100 - 50 = 50
+            # fake_start = 200 - 50 = 150
+            self.assertEqual(call_args['start_usage'], 150)
+            self.assertEqual(call_args['end_usage'], 200)
+
+    @patch('shadow.Shadow.db_query')
+    def test_get_usage_status_and_deltas_wrap_around(self, mock_db_query):
+        """Test case where usage wraps around (device reboot)."""
+        mock_servers_table = MagicMock()
+        mock_daily_table = MagicMock()
+
+        server_info = {'certname': 'user1', 'server_port': 8001}
+        mock_db_query.side_effect = [
+            [server_info],
+            mock_servers_table,
+            mock_daily_table
+        ]
+
+        self.shadow_service.sock = MagicMock()
+        # Current usage 50 < Previous 1000 (Reboot happened)
+        self.shadow_service.sock.recv.return_value = b'stat: {"8001": 50}'
+
+        # Previous usage in DB was 1000
+        mock_servers_table.find_one.return_value = {
+            'certname': 'user1', 'usage': 1000
+        }
+
+        # Daily record exists. End usage was 1000.
+        mock_daily_table.find_one.return_value = {
+            'certname': 'user1',
+            'date': '2026-01-01',
+            'start_usage': 900,
+            'end_usage': 1000
+        }
+
+        with patch('shadow.datetime') as mock_date:
+            mock_date.today.return_value.strftime.return_value = '2026-01-01'
+
+            results, deltas = self.shadow_service.get_usage_status_and_deltas()
+
+            self.assertEqual(deltas['user1'], 50)
+
+            mock_daily_table.upsert.assert_called()
+            call_args = mock_daily_table.upsert.call_args[0][0]
+            self.assertEqual(call_args['end_usage'], 50)
+
+    @patch('shadow.Shadow.db_query')
+    def test_get_usage_status_and_deltas_socket_error_or_empty(self, mock_db_query):
+        """Test case with socket error response."""
+        mock_servers_table = MagicMock()
+        mock_daily_table = MagicMock()
+
+        mock_db_query.side_effect = [
+            [{'certname': 'user1', 'server_port': 8001}],
+            mock_servers_table,
+            mock_daily_table
+        ]
+
+        self.shadow_service.sock = MagicMock()
+        # Empty stats response
+        self.shadow_service.sock.recv.return_value = b'stat: {}'
+
+        # Mock that we don't find it in usage DB
+        mock_servers_table.find_one.return_value = None
+
+        # Mock daily not found
+        mock_daily_table.find_one.return_value = None
+
+        results, deltas = self.shadow_service.get_usage_status_and_deltas()
+
+        self.assertEqual(deltas['user1'], 0)
+
+    @patch('shadow.Shadow.db_query')
+    def test_get_usage_status_new_day(self, mock_db_query):
+        """Test case where it's a new day (daily record missing)."""
+        mock_servers_table = MagicMock()
+        mock_daily_table = MagicMock()
+
+        mock_db_query.side_effect = [
+            [{'certname': 'user1', 'server_port': 8001}],
+            mock_servers_table,
+            mock_daily_table
+        ]
+
+        self.shadow_service.sock = MagicMock()
+        self.shadow_service.sock.recv.return_value = b'stat: {"8001": 150}'
+
+        # In usage DB
+        mock_servers_table.find_one.return_value = {'usage': 100}
+
+        # NOT in daily DB
+        mock_daily_table.find_one.return_value = None
+
+        with patch('shadow.datetime') as mock_date:
+            mock_date.today.return_value.strftime.return_value = '2026-01-02'
+
+            results, deltas = self.shadow_service.get_usage_status_and_deltas()
+
+            self.assertEqual(deltas['user1'], 50)  # 150 - 100 = 50
+
+            # Verify new day upsert
+            mock_daily_table.upsert.assert_called()
+            call_args = mock_daily_table.upsert.call_args[0][0]
+            self.assertEqual(call_args['start_usage'], 150)
+            self.assertEqual(call_args['end_usage'], 150)
+            self.assertEqual(call_args['date'], '2026-01-02')
 
 
 if __name__ == '__main__':
