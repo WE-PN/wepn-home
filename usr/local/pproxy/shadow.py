@@ -334,11 +334,11 @@ class Shadow(Service):
         return usage
 
     def get_usage_deltas(self, clear_counters=False):
-        usage, deltas = self.get_usage_status_and_deltas(clear_counters)
+        usage, deltas = self.get_usage_status_and_deltas(use_periodic_table=clear_counters)
         return deltas
 
     # TODO: this needs to be split, so above calls are not redundant
-    def get_usage_status_and_deltas(self, clear_counters=False):
+    def get_usage_status_and_deltas(self, use_periodic_table=False):
         self.logger.debug("----- summary -----")
         servers = self.db_query('servers')
         usage_results = {}
@@ -424,8 +424,15 @@ class Shadow(Service):
                                               'type': 'shadow',
                                               'end_usage': usage_value}, ['certname', 'date'])
                 else:
-                    # wrap around/restart has happened
-                    if usage_today['end_usage'] < usage_value:
+                    # logic fixed: normal increase updates end_usage
+                    if usage_today['end_usage'] <= usage_value:
+                        usage_daily_table.upsert({'certname': server['certname'],
+                                                  'date': today,
+                                                  'server_port': server['server_port'],
+                                                  'type': 'shadow',
+                                                  'end_usage': usage_value}, ['certname', 'date'])
+                    else:
+                        # wrap around/restart has happened
                         # we have lost some data probably, don't overwrite
                         # the last end with this one.
                         # set start to 0, end to a fake adjustment
@@ -440,18 +447,55 @@ class Shadow(Service):
                                                   'start_usage': fake_start,
                                                   'type': 'shadow',
                                                   'end_usage': usage_value}, ['certname', 'date'])
-                    else:
-                        # all is normal, just update the end
-                        usage_daily_table.upsert({'certname': server['certname'],
-                                                  'date': today,
-                                                  'server_port': server['server_port'],
-                                                  'type': 'shadow',
-                                                  'end_usage': usage_value}, ['certname', 'date'])
+
+                ####################################################
+                # Periodic (4h) Measurement
+                ####################################################
+                # servers table now tracks periodic_usage and last_periodic_time
+                periodic_usage = usage_server.get('periodic_usage', 0) if usage_server else 0
+                last_periodic_time = usage_server.get(
+                    'last_periodic_time', 0) if usage_server else 0
+
+                # Increment periodic usage by the current delta
+                periodic_usage += delta
+
+                now_ts = int(time.time())
+                four_hours_seconds = 4 * 3600
+
+                # Determine which delta to report
+                delta_to_report = delta
+                if use_periodic_table:
+                    delta_to_report = periodic_usage
+
+                # If it's time for a new periodic recording
+                if now_ts - last_periodic_time >= four_hours_seconds:
+                    self.logger.info(
+                        f"Recording periodic usage for {server['certname']}: {periodic_usage}")
+                    usage_periodic_table = self.db_query(
+                        'periodic', return_table=True)
+                    # Use the start of the 4-hour window as the timestamp
+                    periodic_date = datetime.fromtimestamp(
+                        now_ts).strftime('%Y-%m-%d %H:00:00')
+                    usage_periodic_table.insert({
+                        'certname': server['certname'],
+                        'date': periodic_date,
+                        'usage': periodic_usage,
+                        'server_port': server['server_port']
+                    })
+                    # Reset counts
+                    periodic_usage = 0
+                    last_periodic_time = now_ts
+
+                # update the delta in the results
+                usage_deltas[server['certname']] = delta_to_report
+
                 # this one is for the overall usage, used for "usage status"
                 usage_servers_table.upsert({'certname': server['certname'],
                                             'server_port': server['server_port'],
                                             'usage': usage_value,
-                                            'status': usage_status}, ['certname'])
+                                            'status': usage_status,
+                                            'periodic_usage': periodic_usage,
+                                            'last_periodic_time': last_periodic_time}, ['certname'])
 
                 # append to the results of the current call
                 usage_results[server['certname']] = usage_status
