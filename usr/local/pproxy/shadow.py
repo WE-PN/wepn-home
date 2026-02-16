@@ -330,7 +330,7 @@ class Shadow(Service):
         return link
 
     def get_usage_status_summary(self):
-        usage, deltas = self.get_usage_status_and_deltas()
+        usage, deltas = self.get_usage_status_and_deltas(use_periodic_table=False)
         return usage
 
     def get_usage_deltas(self, clear_counters=False):
@@ -401,6 +401,7 @@ class Shadow(Service):
                         # and then convert to bits from byte
                         delta = (current_usage - usage_server['usage']) * 8
                 self.logger.debug("usage value = " + str(usage_value))
+                self.logger.debug("delta value = " + str(delta))
                 if usage_value > 0:
                     usage_status = 1
                 self.logger.debug('certname:' + server['certname'] +
@@ -460,17 +461,12 @@ class Shadow(Service):
 
                 # Increment periodic usage by the current delta
                 periodic_usage += delta
-
                 now_ts = int(time.time())
-                four_hours_seconds = 4 * 3600
 
                 # Determine which delta to report
                 delta_to_report = delta
                 if use_periodic_table:
                     delta_to_report = periodic_usage
-
-                # If it's time for a new periodic recording
-                if now_ts - last_periodic_time >= four_hours_seconds:
                     self.logger.info(
                         f"Recording periodic usage for {server['certname']}: {periodic_usage}")
                     usage_periodic_table = self.db_query(
