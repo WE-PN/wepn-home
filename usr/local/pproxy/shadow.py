@@ -330,12 +330,112 @@ class Shadow(Service):
         return link
 
     def get_usage_status_summary(self):
-        usage, deltas = self.get_usage_status_and_deltas(use_periodic_table=False)
+        usage, deltas = self.get_usage_status_and_deltas()
         return usage
 
     def get_usage_deltas(self, clear_counters=False):
         usage, deltas = self.get_usage_status_and_deltas(use_periodic_table=clear_counters)
         return deltas
+
+    def get_deltas_for_server(self, table, certname, current_usage):
+        # query what is recorded in the db now
+        server_record = table.find_one(certname=certname)
+        if not server_record:
+            return current_usage
+        # check if wrapped around
+        if current_usage < server_record['usage']:
+            self.logger.debug("Usage wrapped around for server " + certname)
+            return current_usage
+        # return the correct delta
+        delta = current_usage - server_record['usage']
+        self.logger.debug("Delta for server " + certname + " is " + str(delta))
+        return delta
+
+    def get_current_reading(self):
+        # get usage statistics from ss-manager
+        cmd = 'ping'
+        self.sock.send(str.encode(cmd))
+        # ping response has some text, remove it
+        raw_str = str(self.sock.recv(1056)).replace(
+            "b'stat:", "").replace("'", "")
+        response = json.loads(raw_str)
+        return response
+
+    def get_usage_for_servers(self):
+        servers = self.db_query('servers', return_table=True)
+        if not servers or not self.is_enabled():
+            self.logger.debug("No servers found for usage")
+            return {}
+        usage_deltas = {}
+        usage_statuses = {}
+        current_reading = self.get_current_reading()
+        for server in list(servers.all()):
+            try:
+                self.logger.debug("current server name is " + server['certname'])
+                server_name = str(server['server_port'])
+                if server_name in current_reading:
+                    current_usage = current_reading[server_name]
+                    delta = self.get_deltas_for_server(
+                        table=servers,
+                        certname=server['certname'],
+                        current_usage=current_usage)
+                    if delta >= 0:
+                        usage_statuses[server['certname']] = 1
+                    else:
+                        usage_statuses[server['certname']] = 0
+                    self.update_daily_usage(server, current_usage)
+                else:
+                    self.logger.debug(
+                        "port=" + str(server['server_port']) + " not found in current reading")
+                    usage_statuses[server['certname']] = -1
+                usage_deltas[server['certname']] = delta * 8
+            except Exception as e:
+                self.logger.error("Error getting usage for server " +
+                                  server['certname'] + ": " + str(e))
+                usage_deltas[server['certname']] = -1
+                usage_statuses[server['certname']] = -1
+        return usage_statuses, usage_deltas
+
+    def update_daily_usage(self, server, current_reading):
+        usage_daily_table = self.db_query('daily', return_table=True)
+        today = datetime.today().strftime('%Y-%m-%d')
+        usage_today = usage_daily_table.find_one(
+            certname=server['certname'], date=today)
+        if usage_today is None:
+            self.logger.info("New day")
+            # this is a new day, start is 0
+            usage_daily_table.upsert({'certname': server['certname'],
+                                      'date': today,
+                                      'start_usage': current_reading,
+                                      'server_port': server['server_port'],
+                                      'type': 'shadow',
+                                      'end_usage': current_reading},
+                                     ['certname', 'date'])
+        else:
+            # logic fixed: normal increase updates end_usage
+            if usage_today['end_usage'] <= current_reading:
+                usage_daily_table.upsert({'certname': server['certname'],
+                                          'date': today,
+                                          'server_port': server['server_port'],
+                                          'type': 'shadow',
+                                          'end_usage': current_reading},
+                                         ['certname', 'date'])
+            else:
+                # wrap around/restart has happened
+                # we have lost some data probably, don't overwrite
+                # the last end with this one.
+                # set start to 0, end to a fake adjustment
+                past_delta = usage_today['end_usage'] - \
+                    usage_today['start_usage']
+                # we create a fake start that starts earlier, so that future end values
+                # can directly come from ShadowSocks socket.
+                fake_start = current_reading - past_delta
+                usage_daily_table.upsert({'certname': server['certname'],
+                                          'date': today,
+                                          'server_port': server['server_port'],
+                                          'start_usage': fake_start,
+                                          'type': 'shadow',
+                                          'end_usage': current_reading}, ['certname', 'date'])
 
     # TODO: this needs to be split, so above calls are not redundant
     def get_usage_status_and_deltas(self, use_periodic_table=False):
