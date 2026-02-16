@@ -461,7 +461,7 @@ class TestShadow(unittest.TestCase):
 
             results, deltas = self.shadow_service.get_usage_status_and_deltas()
 
-            self.assertEqual(deltas['user1'], 100)  # 200 - 100 = 100 delta
+            self.assertEqual(deltas['user1'], 800)  # (200 - 100) * 8 = 800 delta
 
             # Verify upserts
             mock_daily_table.upsert.assert_called()
@@ -507,7 +507,7 @@ class TestShadow(unittest.TestCase):
 
             results, deltas = self.shadow_service.get_usage_status_and_deltas()
 
-            self.assertEqual(deltas['user1'], 50)
+            self.assertEqual(deltas['user1'], 400)
 
             mock_daily_table.upsert.assert_called()
             call_args = mock_daily_table.upsert.call_args[0][0]
@@ -567,7 +567,7 @@ class TestShadow(unittest.TestCase):
 
             results, deltas = self.shadow_service.get_usage_status_and_deltas()
 
-            self.assertEqual(deltas['user1'], 50)  # 150 - 100 = 50
+            self.assertEqual(deltas['user1'], 400)  # (150 - 100) *  8 = 400
 
             # Verify new day upsert
             mock_daily_table.upsert.assert_called()
@@ -628,10 +628,10 @@ class TestShadow(unittest.TestCase):
 
         self.shadow_service.get_usage_status_and_deltas()
 
-        # Verify periodic_usage updated: 1000 + (150-100) = 1050
+        # Verify periodic_usage updated: 1000 + (150-100) * 8 = 1400
         mock_servers_table.upsert.assert_called()
         call_args = mock_servers_table.upsert.call_args[0][0]
-        self.assertEqual(call_args['periodic_usage'], 1050)
+        self.assertEqual(call_args['periodic_usage'], 1400)
 
     @patch('shadow.Shadow.db_query')
     def test_periodic_measurement_recording(self, mock_db_query):
@@ -665,10 +665,10 @@ class TestShadow(unittest.TestCase):
         self.shadow_service.get_usage_status_and_deltas()
 
         # Verify periodic record inserted
-        # usage = accumulated(1000) + current_delta(50) = 1050
+        # usage = accumulated(1000) + current_delta(50)*8 = 1400
         mock_periodic_table.insert.assert_called()
         insert_args = mock_periodic_table.insert.call_args[0][0]
-        self.assertEqual(insert_args['usage'], 1050)
+        self.assertEqual(insert_args['usage'], 1400)
         self.assertIn(':', insert_args['date'])  # Should have HH:MM:SS
 
         # Verify status reset in servers table
@@ -704,8 +704,8 @@ class TestShadow(unittest.TestCase):
         results, deltas = self.shadow_service.get_usage_status_and_deltas(use_periodic_table=True)
 
         # delta = 150 - 100 = 50
-        # reported_delta should be periodic_usage (1000) + current_delta (50) = 1050
-        self.assertEqual(deltas['user1'], 1050)
+        # reported_delta should be periodic_usage (1000) + current_delta (50) * 8 = 1400
+        self.assertEqual(deltas['user1'], 1400)
 
 
 if __name__ == '__main__':
