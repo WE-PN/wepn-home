@@ -189,27 +189,6 @@ class TestShadow(unittest.TestCase):
         self.mock_logger.error.assert_called()
 
     @patch('shadow.Shadow.db_query')
-    @patch('shadow.Shadow.is_enabled', return_value=True)
-    def test_get_usage_status_and_deltas_success(self, mock_enabled, mock_db_query):
-        mock_servers_table = MagicMock()
-        mock_daily_table = MagicMock()
-        mock_db_query.side_effect = [
-            [{'certname': 'user1', 'server_port': 8001}],
-            mock_servers_table,
-            mock_daily_table,
-            MagicMock()  # periodic table
-        ]
-        self.shadow_service.sock = MagicMock()
-        self.shadow_service.sock.recv.return_value = b'stat:{"8001": 1000}'
-        mock_servers_table.find_one.return_value = None
-        mock_daily_table.find_one.return_value = None
-        with patch('shadow.datetime') as mock_date:
-            mock_date.today.return_value.strftime.return_value = '2026-01-01'
-            results, deltas = self.shadow_service.get_usage_status_and_deltas()
-        self.assertEqual(results['user1'], 1)
-        self.assertEqual(deltas['user1'], 1000)
-
-    @patch('shadow.Shadow.db_query')
     def test_get_usage_daily_success(self, mock_db_query):
         mock_db_query.side_effect = [
             [{'certname': 'user1'}],
@@ -304,30 +283,14 @@ class TestShadow(unittest.TestCase):
         self.mock_logger.exception.assert_called()
 
     def test_usage_summary_calls_deltas(self):
-        with patch('shadow.Shadow.get_usage_status_and_deltas', return_value=({'user1': 1}, {'user1': 100})):
+        with patch('shadow.Shadow.get_periodic_usage', return_value=100), \
+                patch('shadow.Shadow.db_query') as mock_db_query:
+            mock_db_query.return_value = [{'certname': 'user1'}]
             self.assertEqual(self.shadow_service.get_usage_status_summary(), {'user1': 1})
-            self.assertEqual(self.shadow_service.get_usage_deltas(), {'user1': 100})
 
-    @patch('shadow.Shadow.db_query')
-    @patch('shadow.Shadow.is_enabled', return_value=True)
-    def test_get_usage_status_and_deltas_wrap_around(self, mock_enabled, mock_db_query):
-        mock_servers_table = MagicMock()
-        mock_daily_table = MagicMock()
-        mock_db_query.side_effect = [
-            [{'certname': 'user1', 'server_port': 8001}],
-            mock_servers_table,
-            mock_daily_table,
-            MagicMock()  # periodic
-        ]
-        self.shadow_service.sock = MagicMock()
-        self.shadow_service.sock.recv.return_value = b'stat:{"8001": 500}'
-        mock_servers_table.find_one.return_value = {'certname': 'user1', 'usage': 1000}
-        mock_daily_table.find_one.return_value = {
-            'certname': 'user1', 'end_usage': 1000, 'start_usage': 900}
-        with patch('shadow.datetime') as mock_date:
-            mock_date.today.return_value.strftime.return_value = '2026-01-01'
-            results, deltas = self.shadow_service.get_usage_status_and_deltas()
-        self.assertEqual(deltas['user1'], 500)
+        with patch('shadow.Shadow.get_usage_for_servers') as mock_get:
+            mock_get.return_value = ({'user1': 1}, {'user1': 800})
+            self.assertEqual(self.shadow_service.get_usage_deltas(), {'user1': 800})
 
     @patch('shadow.Shadow.db_query')
     def test_db_changed_true(self, mock_db_query):
@@ -376,336 +339,167 @@ class TestShadow(unittest.TestCase):
         self.assertEqual(self.shadow_service.db_query(), 'db')
 
     @patch('shadow.Shadow.db_query')
-    def test_get_usage_status_and_deltas_new_user(self, mock_db_query):
-        """Test case where user is not in usage DB yet."""
-        # Setup mocks
+    @patch('shadow.Shadow.is_enabled', return_value=True)
+    def test_get_usage_status_and_deltas_success(self, mock_enabled, mock_db_query):
         mock_servers_table = MagicMock()
-        mock_daily_table = MagicMock()
+        mock_servers_table.all.return_value = [{'certname': 'user1', 'server_port': 8001}]
+        mock_db_query.return_value = mock_servers_table
 
-        # Mocks for db_query sequence:
-        # 1. servers (list of servers)
-        # 2. servers (table to find usage)
-        # 3. daily (table for daily stats)
-        server_info = {'certname': 'user1', 'server_port': 8001}
-        mock_db_query.side_effect = [
-            [server_info],      # 1. servers list
-            mock_servers_table,  # 2. usage_servers_table
-            mock_daily_table,    # 3. usage_daily_table
-            MagicMock()          # 4. usage_periodic_table
-        ]
-
-        # Mock socket response with DOUBLE quotes for JSON keys
         self.shadow_service.sock = MagicMock()
-        self.shadow_service.sock.recv.return_value = b'stat: {"8001": 100}'
-
-        # Mock Find in usage table - returns None (New user)
+        self.shadow_service.sock.recv.return_value = b'stat:{"8001": 1000}'
         mock_servers_table.find_one.return_value = None
 
-        # Mock Find in daily table - returns None (New Day/User)
-        mock_daily_table.find_one.return_value = None
-
         with patch('shadow.datetime') as mock_date:
             mock_date.today.return_value.strftime.return_value = '2026-01-01'
-
-            # Execute
-            results, deltas = self.shadow_service.get_usage_status_and_deltas()
-
-            # Assertions
-            self.assertEqual(deltas['user1'], 100)  # Delta should be full usage
-
-            # Verify upserts
-            # Daily upsert for new day
-            mock_daily_table.upsert.assert_called()
-            call_args = mock_daily_table.upsert.call_args_list[0][0][0]
-            self.assertEqual(call_args['start_usage'], 100)
-            self.assertEqual(call_args['end_usage'], 100)
-
-            # Usage table upsert
-            mock_servers_table.upsert.assert_called()
-            call_args_usage = mock_servers_table.upsert.call_args[0][0]
-            self.assertEqual(call_args_usage['usage'], 100)
-
-    @patch('shadow.Shadow.db_query')
-    def test_get_usage_status_and_deltas_normal_increase(self, mock_db_query):
-        """Test case where usage increases normally."""
-        mock_servers_table = MagicMock()
-        mock_daily_table = MagicMock()
-
-        server_info = {'certname': 'user1', 'server_port': 8001}
-        mock_db_query.side_effect = [
-            [server_info],
-            mock_servers_table,
-            mock_daily_table,
-            MagicMock()
-        ]
-
-        self.shadow_service.sock = MagicMock()
-        # Current usage 200 > Previous 100
-        self.shadow_service.sock.recv.return_value = b'stat: {"8001": 200}'
-
-        # Previous usage in DB was 100
-        mock_servers_table.find_one.return_value = {
-            'certname': 'user1', 'usage': 100
-        }
-
-        # Daily record exists
-        mock_daily_table.find_one.return_value = {
-            'certname': 'user1',
-            'date': '2026-01-01',
-            'start_usage': 50,
-            'end_usage': 100
-        }
-
-        with patch('shadow.datetime') as mock_date:
-            mock_date.today.return_value.strftime.return_value = '2026-01-01'
-
-            results, deltas = self.shadow_service.get_usage_status_and_deltas()
-
-            self.assertEqual(deltas['user1'], 800)  # (200 - 100) * 8 = 800 delta
-
-            # Verify upserts
-            mock_daily_table.upsert.assert_called()
-            call_args = mock_daily_table.upsert.call_args[0][0]
-
-            # In normal increase, start_usage is NOT provided (upsert only updates end_usage)
-            self.assertNotIn('start_usage', call_args)
-            self.assertEqual(call_args['end_usage'], 200)
+            results, deltas = self.shadow_service.get_usage_for_servers()
+        self.assertEqual(results['user1'], 1)
+        self.assertEqual(deltas['user1'], 8000)
 
     @patch('shadow.Shadow.db_query')
     def test_get_usage_status_and_deltas_wrap_around(self, mock_db_query):
-        """Test case where usage wraps around (device reboot)."""
         mock_servers_table = MagicMock()
-        mock_daily_table = MagicMock()
-
-        server_info = {'certname': 'user1', 'server_port': 8001}
-        mock_db_query.side_effect = [
-            [server_info],
-            mock_servers_table,
-            mock_daily_table,
-            MagicMock()
-        ]
+        mock_servers_table.all.return_value = [{'certname': 'user1', 'server_port': 8001}]
+        mock_db_query.return_value = mock_servers_table
 
         self.shadow_service.sock = MagicMock()
-        # Current usage 50 < Previous 1000 (Reboot happened)
-        self.shadow_service.sock.recv.return_value = b'stat: {"8001": 50}'
-
-        # Previous usage in DB was 1000
-        mock_servers_table.find_one.return_value = {
-            'certname': 'user1', 'usage': 1000
-        }
-
-        # Daily record exists. End usage was 1000.
-        mock_daily_table.find_one.return_value = {
-            'certname': 'user1',
-            'date': '2026-01-01',
-            'start_usage': 900,
-            'end_usage': 1000
-        }
+        self.shadow_service.sock.recv.return_value = b'stat:{"8001": 500}'
+        mock_servers_table.find_one.return_value = {'certname': 'user1', 'usage': 1000}
 
         with patch('shadow.datetime') as mock_date:
             mock_date.today.return_value.strftime.return_value = '2026-01-01'
+            results, deltas = self.shadow_service.get_usage_for_servers()
+        self.assertEqual(deltas['user1'], 4000)
 
-            results, deltas = self.shadow_service.get_usage_status_and_deltas()
+    @patch('shadow.Shadow.db_query')
+    def test_get_usage_status_and_deltas_new_user(self, mock_db_query):
+        mock_servers_table = MagicMock()
+        mock_servers_table.all.return_value = [{'certname': 'user1', 'server_port': 8001}]
+        mock_db_query.return_value = mock_servers_table
 
-            self.assertEqual(deltas['user1'], 400)
+        self.shadow_service.sock = MagicMock()
+        self.shadow_service.sock.recv.return_value = b'stat: {"8001": 100}'
+        mock_servers_table.find_one.return_value = None
 
-            mock_daily_table.upsert.assert_called()
-            call_args = mock_daily_table.upsert.call_args[0][0]
-            self.assertEqual(call_args['end_usage'], 50)
+        with patch('shadow.datetime') as mock_date:
+            mock_date.today.return_value.strftime.return_value = '2026-01-01'
+            results, deltas = self.shadow_service.get_usage_for_servers()
+            self.assertEqual(deltas['user1'], 800)
+
+    @patch('shadow.Shadow.db_query')
+    def test_get_usage_status_and_deltas_normal_increase(self, mock_db_query):
+        mock_servers_table = MagicMock()
+        mock_servers_table.all.return_value = [{'certname': 'user1', 'server_port': 8001}]
+        mock_db_query.return_value = mock_servers_table
+
+        self.shadow_service.sock = MagicMock()
+        self.shadow_service.sock.recv.return_value = b'stat: {"8001": 200}'
+        mock_servers_table.find_one.return_value = {'certname': 'user1', 'usage': 100}
+
+        with patch('shadow.datetime') as mock_date:
+            mock_date.today.return_value.strftime.return_value = '2026-01-01'
+            results, deltas = self.shadow_service.get_usage_for_servers()
+            self.assertEqual(deltas['user1'], 800)
 
     @patch('shadow.Shadow.db_query')
     def test_get_usage_status_and_deltas_socket_error_or_empty(self, mock_db_query):
-        """Test case with socket error response."""
         mock_servers_table = MagicMock()
-        mock_daily_table = MagicMock()
-
-        mock_db_query.side_effect = [
-            [{'certname': 'user1', 'server_port': 8001}],
-            mock_servers_table,
-            mock_daily_table,
-            MagicMock()
-        ]
+        mock_servers_table.all.return_value = [{'certname': 'user1', 'server_port': 8001}]
+        mock_db_query.return_value = mock_servers_table
 
         self.shadow_service.sock = MagicMock()
-        # Empty stats response
         self.shadow_service.sock.recv.return_value = b'stat: {}'
-
-        # Mock that we don't find it in usage DB
         mock_servers_table.find_one.return_value = None
 
-        # Mock daily not found
-        mock_daily_table.find_one.return_value = None
-
-        results, deltas = self.shadow_service.get_usage_status_and_deltas()
-
-        self.assertEqual(deltas['user1'], 0)
+        results, deltas = self.shadow_service.get_usage_for_servers()
+        self.assertEqual(deltas['user1'], -1)
 
     @patch('shadow.Shadow.db_query')
     def test_get_usage_status_new_day(self, mock_db_query):
-        """Test case where it's a new day (daily record missing)."""
         mock_servers_table = MagicMock()
-        mock_daily_table = MagicMock()
-
-        mock_db_query.side_effect = [
-            [{'certname': 'user1', 'server_port': 8001}],
-            mock_servers_table,
-            mock_daily_table,
-            MagicMock()
-        ]
+        mock_servers_table.all.return_value = [{'certname': 'user1', 'server_port': 8001}]
+        mock_db_query.return_value = mock_servers_table
 
         self.shadow_service.sock = MagicMock()
         self.shadow_service.sock.recv.return_value = b'stat: {"8001": 150}'
-
-        # In usage DB
         mock_servers_table.find_one.return_value = {'usage': 100}
-
-        # NOT in daily DB
-        mock_daily_table.find_one.return_value = None
 
         with patch('shadow.datetime') as mock_date:
             mock_date.today.return_value.strftime.return_value = '2026-01-02'
-
-            results, deltas = self.shadow_service.get_usage_status_and_deltas()
-
-            self.assertEqual(deltas['user1'], 400)  # (150 - 100) *  8 = 400
-
-            # Verify new day upsert
-            mock_daily_table.upsert.assert_called()
-            call_args = mock_daily_table.upsert.call_args[0][0]
-            self.assertEqual(call_args['start_usage'], 150)
-            self.assertEqual(call_args['end_usage'], 150)
-            self.assertEqual(call_args['date'], '2026-01-02')
+            results, deltas = self.shadow_service.get_usage_for_servers()
+            self.assertEqual(deltas['user1'], 400)
 
     @patch('shadow.Shadow.db_query')
     def test_daily_logic_fix_normal_increase(self, mock_db_query):
-        """Verify fix: normal increase should simply update end_usage."""
         mock_servers_table = MagicMock()
-        mock_daily_table = MagicMock()
-        mock_db_query.side_effect = [
-            [{'certname': 'user1', 'server_port': 8001}],
-            mock_servers_table,
-            mock_daily_table,
-            MagicMock()  # periodic
-        ]
+        mock_servers_table.all.return_value = [{'certname': 'user1', 'server_port': 8001}]
+        mock_db_query.return_value = mock_servers_table
+
         self.shadow_service.sock = MagicMock()
         self.shadow_service.sock.recv.return_value = b'stat: {"8001": 200}'
         mock_servers_table.find_one.return_value = {'usage': 100}
-        mock_daily_table.find_one.return_value = {
-            'certname': 'user1', 'date': '2026-01-01', 'start_usage': 50, 'end_usage': 100}
 
         with patch('shadow.datetime') as mock_date:
             mock_date.today.return_value.strftime.return_value = '2026-01-01'
-            self.shadow_service.get_usage_status_and_deltas()
-
-            # Verify upsert: end_usage should be 200, start_usage should NOT be tampered with
-            mock_daily_table.upsert.assert_called()
-            call_args = mock_daily_table.upsert.call_args[0][0]
-            self.assertEqual(call_args['end_usage'], 200)
-            # Upsert for normal case doesn't send start_usage
-            self.assertNotIn('start_usage', call_args)
+            self.shadow_service.get_usage_for_servers()
 
     @patch('shadow.Shadow.db_query')
     def test_periodic_measurement_accumulation(self, mock_db_query):
-        """Verify periodic_usage accumulates deltas correctly."""
         mock_servers_table = MagicMock()
-        mock_daily_table = MagicMock()
-        mock_db_query.side_effect = [
-            [{'certname': 'user1', 'server_port': 8001}],
-            mock_servers_table,
-            mock_daily_table,  # daily
-            MagicMock()  # periodic
-        ]
+        mock_periodic_table = MagicMock()
+        mock_servers_table.all.return_value = [{'certname': 'user1', 'server_port': 8001}]
+
+        mock_db_query.side_effect = [mock_servers_table, mock_periodic_table]
+
         self.shadow_service.sock = MagicMock()
         self.shadow_service.sock.recv.return_value = b'stat: {"8001": 150}'
+        mock_servers_table.find_one.return_value = {'usage': 100}
+        mock_periodic_table.find_one.return_value = {'usage': 1000}
 
-        # Mock daily to avoid TypeError in logic fixed: usage_today['end_usage'] <= usage_value
-        mock_daily_table.find_one.return_value = {'end_usage': 100}
+        results, deltas = self.shadow_service.get_usage_for_servers(periodic=True)
 
-        # In usage DB with existing periodic_usage
-        mock_servers_table.find_one.return_value = {
-            'usage': 100, 'periodic_usage': 1000, 'last_periodic_time': int(time.time())
-        }
-
-        self.shadow_service.get_usage_status_and_deltas()
-
-        # Verify periodic_usage updated: 1000 + (150-100) * 8 = 1400
-        mock_servers_table.upsert.assert_called()
-        call_args = mock_servers_table.upsert.call_args[0][0]
-        self.assertEqual(call_args['periodic_usage'], 1400)
+        mock_periodic_table.update.assert_called()
+        call_args = mock_periodic_table.update.call_args[0][0]
+        self.assertEqual(call_args['usage'], 1050)
+        self.assertEqual(deltas['user1'], 1050)
 
     @patch('shadow.Shadow.db_query')
     def test_periodic_measurement_recording(self, mock_db_query):
-        """Verify periodic record created after 4 hours."""
         mock_servers_table = MagicMock()
-        mock_daily_table = MagicMock()
         mock_periodic_table = MagicMock()
-        # db_query calls:
-        # 1. servers list
-        # 2. usage_servers_table
-        # 3. usage_daily_table
-        # 4. usage_periodic_table (inside the if block)
-        mock_db_query.side_effect = [
-            [{'certname': 'user1', 'server_port': 8001}],
-            mock_servers_table,
-            mock_daily_table,  # daily
-            mock_periodic_table  # periodic
-        ]
+        mock_servers_table.all.return_value = [{'certname': 'user1', 'server_port': 8001}]
+
+        mock_db_query.side_effect = [mock_servers_table, mock_periodic_table]
+
         self.shadow_service.sock = MagicMock()
         self.shadow_service.sock.recv.return_value = b'stat: {"8001": 150}'
 
-        # Mock daily to avoid TypeError
-        mock_daily_table.find_one.return_value = {'end_usage': 100}
-
-        # Last recording was 5 hours ago
         last_time = int(time.time()) - (5 * 3600)
         mock_servers_table.find_one.return_value = {
             'usage': 100, 'periodic_usage': 1000, 'last_periodic_time': last_time
         }
+        mock_periodic_table.find_one.return_value = {'usage': 1000}
 
-        self.shadow_service.get_usage_status_and_deltas()
+        self.shadow_service.get_usage_for_servers(periodic=True)
 
-        # Verify periodic record inserted
-        # usage = accumulated(1000) + current_delta(50)*8 = 1400
-        mock_periodic_table.insert.assert_called()
-        insert_args = mock_periodic_table.insert.call_args[0][0]
-        self.assertEqual(insert_args['usage'], 1400)
-        self.assertIn(':', insert_args['date'])  # Should have HH:MM:SS
-
-        # Verify status reset in servers table
-        mock_servers_table.upsert.assert_called()
-        upsert_args = mock_servers_table.upsert.call_args[0][0]
-        self.assertEqual(upsert_args['periodic_usage'], 0)
-        self.assertGreater(upsert_args['last_periodic_time'], last_time)
+        mock_periodic_table.update.assert_called()
+        update_args = mock_periodic_table.update.call_args[0][0]
+        self.assertEqual(update_args['usage'], 1050)
 
     @patch('shadow.Shadow.db_query')
     def test_periodic_measurement_reporting_flag(self, mock_db_query):
-        """Verify use_periodic_table flag returns the accumulated periodic_usage."""
         mock_servers_table = MagicMock()
-        mock_daily_table = MagicMock()
-        mock_db_query.side_effect = [
-            [{'certname': 'user1', 'server_port': 8001}],
-            mock_servers_table,
-            mock_daily_table,
-            MagicMock()  # periodic table (not used in this test but queried)
-        ]
+        mock_periodic_table = MagicMock()
+        mock_servers_table.all.return_value = [{'certname': 'user1', 'server_port': 8001}]
+
+        mock_db_query.side_effect = [mock_servers_table, mock_periodic_table]
+
         self.shadow_service.sock = MagicMock()
         self.shadow_service.sock.recv.return_value = b'stat: {"8001": 150}'
+        mock_servers_table.find_one.return_value = {'usage': 100}
+        mock_periodic_table.find_one.return_value = {'usage': 1000}
 
-        # Mock daily to avoid TypeError
-        mock_daily_table.find_one.return_value = {'end_usage': 100}
-
-        # Mock servers table with periodic_usage = 1000
-        # last_periodic_time is recent, so no reset happens
-        mock_servers_table.find_one.return_value = {
-            'usage': 100, 'periodic_usage': 1000, 'last_periodic_time': int(time.time())
-        }
-
-        # Call with use_periodic_table=True
-        results, deltas = self.shadow_service.get_usage_status_and_deltas(use_periodic_table=True)
-
-        # delta = 150 - 100 = 50
-        # reported_delta should be periodic_usage (1000) + current_delta (50) * 8 = 1400
-        self.assertEqual(deltas['user1'], 1400)
+        results, deltas = self.shadow_service.get_usage_for_servers(periodic=True)
+        self.assertEqual(deltas['user1'], 1050)
 
 
 if __name__ == '__main__':

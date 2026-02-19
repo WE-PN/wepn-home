@@ -330,12 +330,76 @@ class Shadow(Service):
         return link
 
     def get_usage_status_summary(self):
-        usage, deltas = self.get_usage_status_and_deltas()
+        # this looks at current period usages
+        # 1 means some usage this period, 0 means no usage
+        servers = self.db_query('servers', return_table=True)
+        usage = {}
+        for server in servers:
+            usage[server['certname']] = 1 if self.get_periodic_usage(server) > 0 else 0
+        self.logger.debug("Usage summary: " + str(usage))
         return usage
 
     def get_usage_deltas(self, clear_counters=False):
-        usage, deltas = self.get_usage_status_and_deltas(use_periodic_table=clear_counters)
+        # usage, deltas = self.get_usage_status_and_deltas(use_periodic_table=clear_counters)
+        usage, deltas = self.get_usage_for_servers(
+            use_periodic_table=clear_counters, clear_counters=clear_counters)
         return deltas
+
+    def get_usage_for_servers(self, periodic=False, clear_counters=False):
+        """
+        This is used to calculate if any of the certnames have been in used.
+        Same call is made for long period reporting (4h+) as well as per
+        heartbeat (15mins).
+
+        Below actions are taken:
+        1. get updated readings from shadowsocks server via socket
+        2. accounting for wrap around, estimate delta of usage in bytes
+        3. updates daily usage table (currently disabled to save SD)
+        4.1 if periodic is true, update periodic usage table and use that
+            for reporting (4H+)
+        4.2 if clear_counters is true, clear periodic counters after reporting
+        4.3 if periodic is false, just report readings compared to last time
+            (15min+) and update periodic table
+        5. returns usage deltas and usage statuses
+        """
+        servers = self.db_query('servers', return_table=True)
+        if not servers or not self.is_enabled():
+            self.logger.debug("No servers found for usage")
+            return {}, {}
+        usage_deltas = {}
+        usage_statuses = {}
+        current_reading = self.get_current_reading()
+        for server in list(servers.all()):
+            try:
+                self.logger.debug("current server name is " + server['certname'])
+                server_name = str(server['server_port'])
+                if server_name in current_reading:
+                    current_usage = current_reading[server_name]
+                    delta = self.get_deltas_for_server(
+                        table=servers,
+                        certname=server['certname'],
+                        current_usage=current_usage)
+                    if delta >= 0:
+                        usage_statuses[server['certname']] = 1
+                    else:
+                        usage_statuses[server['certname']] = 0
+                    self.update_daily_usage(server, current_usage)
+                else:
+                    self.logger.debug(
+                        "port=" + str(server['server_port']) + " not found in current reading")
+                    usage_statuses[server['certname']] = -1
+                if periodic:
+                    usage_deltas[server['certname']] = self.update_periodic_usage(
+                        server, delta, clear_counters)
+                else:
+                    usage_deltas[server['certname']] = delta * 8
+
+            except Exception as e:
+                self.logger.error("Error getting usage for server " +
+                                  server['certname'] + ": " + str(e))
+                usage_deltas[server['certname']] = -1
+                usage_statuses[server['certname']] = -1
+        return usage_statuses, usage_deltas
 
     def get_deltas_for_server(self, table, certname, current_usage):
         # query what is recorded in the db now
@@ -361,42 +425,11 @@ class Shadow(Service):
         response = json.loads(raw_str)
         return response
 
-    def get_usage_for_servers(self):
-        servers = self.db_query('servers', return_table=True)
-        if not servers or not self.is_enabled():
-            self.logger.debug("No servers found for usage")
-            return {}
-        usage_deltas = {}
-        usage_statuses = {}
-        current_reading = self.get_current_reading()
-        for server in list(servers.all()):
-            try:
-                self.logger.debug("current server name is " + server['certname'])
-                server_name = str(server['server_port'])
-                if server_name in current_reading:
-                    current_usage = current_reading[server_name]
-                    delta = self.get_deltas_for_server(
-                        table=servers,
-                        certname=server['certname'],
-                        current_usage=current_usage)
-                    if delta >= 0:
-                        usage_statuses[server['certname']] = 1
-                    else:
-                        usage_statuses[server['certname']] = 0
-                    self.update_daily_usage(server, current_usage)
-                else:
-                    self.logger.debug(
-                        "port=" + str(server['server_port']) + " not found in current reading")
-                    usage_statuses[server['certname']] = -1
-                usage_deltas[server['certname']] = delta * 8
-            except Exception as e:
-                self.logger.error("Error getting usage for server " +
-                                  server['certname'] + ": " + str(e))
-                usage_deltas[server['certname']] = -1
-                usage_statuses[server['certname']] = -1
-        return usage_statuses, usage_deltas
-
     def update_daily_usage(self, server, current_reading):
+        # This is not in use anymore, to save SD card health
+        # Measurements live in the remote server now,
+        # no need to save locally.
+        return
         usage_daily_table = self.db_query('daily', return_table=True)
         today = datetime.today().strftime('%Y-%m-%d')
         usage_today = usage_daily_table.find_one(
@@ -412,7 +445,7 @@ class Shadow(Service):
                                       'end_usage': current_reading},
                                      ['certname', 'date'])
         else:
-            # logic fixed: normal increase updates end_usage
+            # normal increase updates end_usage
             if usage_today['end_usage'] <= current_reading:
                 usage_daily_table.upsert({'certname': server['certname'],
                                           'date': today,
@@ -437,171 +470,37 @@ class Shadow(Service):
                                           'type': 'shadow',
                                           'end_usage': current_reading}, ['certname', 'date'])
 
-    # TODO: this needs to be split, so above calls are not redundant
-    def get_usage_status_and_deltas(self, use_periodic_table=False):
-        self.logger.debug("----- shadow summary -----")
-        servers = self.db_query('servers')
-        usage_results = {}
-        usage_deltas = {}
-        if not servers or not self.is_enabled():
-            self.logger.debug("No servers found for usage")
-            return {}, {}
-        # get usage statistics from ss-manager
-        cmd = 'ping'
-        self.sock.send(str.encode(cmd))
-        # ping response has some text, remove it
-        raw_str = str(self.sock.recv(1056)).replace(
-            "b'stat:", "").replace("'", "")
-        response = json.loads(raw_str)
+    def update_periodic_usage(self, server, delta, clear_counters=False):
+        ####################################################
+        # Periodic (4h+) Measurement
+        ####################################################
+        # `periodic` table now tracks periodic_usage and last_periodic_time
+        usage_periodic_table = self.db_query('periodic', return_table=True)
+        current_usage = usage_periodic_table.find_one(
+            certname=server['certname'])
+        if current_usage is None:
+            self.logger.info("New certname")
+            # this is a new certname, initialize with current delta
+            updated_usage = delta
+        else:
+            updated_usage = current_usage['usage'] + delta
+        usage_periodic_table.update({'certname': server['certname'],
+                                     'usage': updated_usage if not clear_counters else 0,
+                                     'last_update_time': datetime.now(),
+                                     'server_port': server['server_port'],
+                                     'type': 'shadow'},
+                                    ['certname'])
+        self.logger.info(
+            f"Recording periodic usage for {server['certname']}: {updated_usage}")
+        return updated_usage
 
-        usage_servers_table = self.db_query('servers', return_table=True)
-        usage_daily_table = self.db_query('daily', return_table=True)
-        usage_status = -1
-        for server in servers:
-            if server['certname'] == "''" or not server['certname']:
-                self.logger.error("Certname is empty, skipping")
-                continue
-            self.logger.debug("current server name is " + server['certname'])
-            try:
-                usage_value = -1
-                usage_server = None
-                usage_status = -1
-                current_usage = 0
-                delta = 0
-                server_name = str(server['server_port'])
-                if server_name in response:
-                    current_usage = response[server_name]
-                    self.logger.debug("port=" + str(server['server_port']) +
-                                      " usage=" + str(response[str(server['server_port'])]))
-                    usage_server = usage_servers_table.find_one(
-                        certname=server['certname'])
-                if usage_server is None or usage_server['usage'] is None or 'usage' not in usage_server:
-                    # not yet in the database
-                    usage_value = current_usage
-                    delta = current_usage
-                    self.logger.debug(
-                        "Usage not in db yet. value=" + str(usage_value))
-                else:
-                    self.logger.debug(
-                        "Current usage in db = " + str(usage_server['usage']))
-
-                    # already has some value in usage db
-                    if usage_server['usage'] > current_usage:
-                        # wrap around, device recently rebooted?
-                        self.logger.debug(
-                            f"usage value has gone down!! {server['certname']} {current_usage} -- db: {usage_server['usage']}")
-                        usage_value = current_usage
-                        # some of the data usage is lost, but we get the estimate
-                        # convert from byte to bit as well
-                        delta = current_usage * 8
-                    else:
-                        # not a wrap around, just replace
-                        usage_value = current_usage
-                        # how many bytes used since last update
-                        # and then convert to bits from byte
-                        delta = (current_usage - usage_server['usage']) * 8
-                self.logger.debug("usage value = " + str(usage_value))
-                self.logger.debug("delta value = " + str(delta))
-                if usage_value > 0:
-                    usage_status = 1
-                self.logger.debug('certname:' + server['certname'] +
-                                  ' server_port:' + str(server['server_port']) +
-                                  ' usage:' + str(usage_value) +
-                                  ' status:' + str(usage_status))
-                usage_deltas[server['certname']] = delta
-
-                ####################################################
-                # Now add it to the daily log of the server
-                ####################################################
-
-                today = datetime.today().strftime('%Y-%m-%d')
-                usage_today = usage_daily_table.find_one(
-                    certname=server['certname'], date=today)
-                if usage_today is None:
-                    self.logger.info("New day")
-                    # this is a new day, start is 0
-                    usage_daily_table.upsert({'certname': server['certname'],
-                                              'date': today,
-                                              'start_usage': usage_value,
-                                              'server_port': server['server_port'],
-                                              'type': 'shadow',
-                                              'end_usage': usage_value}, ['certname', 'date'])
-                else:
-                    # logic fixed: normal increase updates end_usage
-                    if usage_today['end_usage'] <= usage_value:
-                        usage_daily_table.upsert({'certname': server['certname'],
-                                                  'date': today,
-                                                  'server_port': server['server_port'],
-                                                  'type': 'shadow',
-                                                  'end_usage': usage_value}, ['certname', 'date'])
-                    else:
-                        # wrap around/restart has happened
-                        # we have lost some data probably, don't overwrite
-                        # the last end with this one.
-                        # set start to 0, end to a fake adjustment
-                        past_delta = usage_today['end_usage'] - \
-                            usage_today['start_usage']
-                        # we create a fake start that starts earlier, so that future end values
-                        # can directly come from ShadowSocks socket.
-                        fake_start = usage_value - past_delta
-                        usage_daily_table.upsert({'certname': server['certname'],
-                                                  'date': today,
-                                                  'server_port': server['server_port'],
-                                                  'start_usage': fake_start,
-                                                  'type': 'shadow',
-                                                  'end_usage': usage_value}, ['certname', 'date'])
-
-                ####################################################
-                # Periodic (4h) Measurement
-                ####################################################
-                # servers table now tracks periodic_usage and last_periodic_time
-                periodic_usage = usage_server.get('periodic_usage', 0) if usage_server else 0
-                last_periodic_time = usage_server.get(
-                    'last_periodic_time', 0) if usage_server else 0
-
-                # Increment periodic usage by the current delta
-                periodic_usage += delta
-                now_ts = int(time.time())
-
-                # Determine which delta to report
-                delta_to_report = delta
-                if use_periodic_table:
-                    delta_to_report = periodic_usage
-                    self.logger.info(
-                        f"Recording periodic usage for {server['certname']}: {periodic_usage}")
-                    usage_periodic_table = self.db_query(
-                        'periodic', return_table=True)
-                    # Use the start of the 4-hour window as the timestamp
-                    periodic_date = datetime.fromtimestamp(
-                        now_ts).strftime('%Y-%m-%d %H:00:00')
-                    usage_periodic_table.insert({
-                        'certname': server['certname'],
-                        'date': periodic_date,
-                        'usage': periodic_usage,
-                        'server_port': server['server_port']
-                    })
-                    # Reset counts
-                    periodic_usage = 0
-                    last_periodic_time = now_ts
-
-                # update the delta in the results
-                usage_deltas[server['certname']] = delta_to_report
-
-                # this one is for the overall usage, used for "usage status"
-                usage_servers_table.upsert({'certname': server['certname'],
-                                            'server_port': server['server_port'],
-                                            'usage': usage_value,
-                                            'status': usage_status,
-                                            'periodic_usage': periodic_usage,
-                                            'last_periodic_time': last_periodic_time}, ['certname'])
-
-                # append to the results of the current call
-                usage_results[server['certname']] = usage_status
-
-            except KeyError as e:
-                self.logger.error("Port not found in ping stats: " + str(e))
-            self.logger.debug("=========== end shadow summary =================")
-        return usage_results, usage_deltas
+    def get_periodic_usage(self, server):
+        usage_periodic_table = self.db_query('periodic', return_table=True)
+        current_usage = usage_periodic_table.find_one(
+            certname=server['certname'])
+        if current_usage is None:
+            return 0
+        return current_usage['usage']
 
     def get_usage_daily(self, day_date=None):
         servers = self.db_query('servers')
