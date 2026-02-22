@@ -342,7 +342,7 @@ class Shadow(Service):
     def get_usage_deltas(self, clear_counters=False):
         # usage, deltas = self.get_usage_status_and_deltas(use_periodic_table=clear_counters)
         usage, deltas = self.get_usage_for_servers(
-            use_periodic_table=clear_counters, clear_counters=clear_counters)
+            periodic=clear_counters, clear_counters=clear_counters)
         return deltas
 
     def get_usage_for_servers(self, periodic=False, clear_counters=False):
@@ -393,6 +393,11 @@ class Shadow(Service):
                         server, delta, clear_counters)
                 else:
                     usage_deltas[server['certname']] = delta * 8
+                # record current state for next delta calculation
+                servers.upsert({'certname': server['certname'],
+                                'server_port': server['server_port'],
+                                'usage': current_usage,
+                                'status': usage_statuses[server['certname']]}, ['certname'])
 
             except Exception as e:
                 self.logger.error("Error getting usage for server " +
