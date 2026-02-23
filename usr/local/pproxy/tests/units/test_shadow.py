@@ -188,19 +188,10 @@ class TestShadow(unittest.TestCase):
                 {'server_port': 8001, 'password': 'pw', 'certname': 'user1'})
         self.mock_logger.error.assert_called()
 
-    @patch('shadow.Shadow.db_query')
-    def test_get_usage_daily_success(self, mock_db_query):
-        mock_db_query.side_effect = [
-            [{'certname': 'user1'}],
-            [{'certname': 'user1', 'date': '2026-01-01', 'start_usage': 100, 'end_usage': 200}]
-        ]
-        daily = self.shadow_service.get_usage_daily()
-        self.assertEqual(daily['user1'][0]['usage'], 100)
-
-    def test_get_usage_json_success(self):
+    def test_get_current_reading_success(self):
         self.shadow_service.sock = MagicMock()
         self.shadow_service.sock.recv.return_value = b'stat:{"8001": 1000}'
-        res = self.shadow_service.get_usage_json()
+        res = self.shadow_service.get_current_reading()
         self.assertEqual(res['8001'], 1000)
 
     @patch('shadow.Shadow.get_short_link_text', return_value='shortlink')
@@ -282,15 +273,27 @@ class TestShadow(unittest.TestCase):
         self.shadow_service.clear()
         self.mock_logger.exception.assert_called()
 
-    def test_usage_summary_calls_deltas(self):
-        with patch('shadow.Shadow.get_periodic_usage', return_value=100), \
-                patch('shadow.Shadow.db_query') as mock_db_query:
-            mock_db_query.return_value = [{'certname': 'user1'}]
-            self.assertEqual(self.shadow_service.get_usage_status_summary(), {'user1': 1})
+    @patch('usage.Usage.db_query')
+    @patch('shadow.Shadow.db_query')
+    def test_usage_summary_calls_deltas(self, mock_shadow_db_query, mock_usage_db_query):
+        mock_usage_table = MagicMock()
+        mock_usage_table.find_one.return_value = {'certname': 'user1', 'short_term': 100}
+        mock_usage_db_query.return_value = mock_usage_table
 
-        with patch('shadow.Shadow.get_usage_for_servers') as mock_get:
-            mock_get.return_value = ({'user1': 1}, {'user1': 800})
-            self.assertEqual(self.shadow_service.get_usage_deltas(), {'user1': 800})
+        mock_shadow_table = MagicMock()
+        mock_shadow_table.__iter__.return_value = [{'certname': 'user1'}]
+        mock_shadow_table.all.return_value = [{'certname': 'user1', 'server_port': 8001}]
+        mock_shadow_db_query.return_value = mock_shadow_table
+
+        self.assertEqual(self.shadow_service.get_usage_status_summary(), {'user1': 1})
+
+        with patch('usage.Usage.update_recorded_usage') as mock_update, \
+                patch('shadow.Shadow.is_enabled', return_value=True):
+            mock_update.return_value = (100, 200, 50)
+            self.shadow_service.sock = MagicMock()
+            self.shadow_service.sock.recv.return_value = b'stat: {"8001": 150}'
+            results, deltas = self.shadow_service.get_usage_for_servers()
+            self.assertEqual(deltas, {'user1': 800})  # 50 * 8 = 400
 
     @patch('shadow.Shadow.db_query')
     def test_db_changed_true(self, mock_db_query):
@@ -338,73 +341,96 @@ class TestShadow(unittest.TestCase):
         mock_connect.return_value = 'db'
         self.assertEqual(self.shadow_service.db_query(), 'db')
 
+    @patch('usage.Usage.db_query')
     @patch('shadow.Shadow.db_query')
     @patch('shadow.Shadow.is_enabled', return_value=True)
-    def test_get_usage_status_and_deltas_success(self, mock_enabled, mock_db_query):
+    def test_get_usage_status_and_deltas_success(self, mock_enabled, mock_shadow_db_query, mock_usage_db_query):
         mock_servers_table = MagicMock()
         mock_servers_table.all.return_value = [{'certname': 'user1', 'server_port': 8001}]
-        mock_db_query.return_value = mock_servers_table
+        mock_shadow_db_query.return_value = mock_servers_table
+
+        mock_usage_table = MagicMock()
+        mock_usage_db_query.return_value = mock_usage_table
+        mock_usage_table.find_one.return_value = None
 
         self.shadow_service.sock = MagicMock()
         self.shadow_service.sock.recv.return_value = b'stat:{"8001": 1000}'
-        mock_servers_table.find_one.return_value = None
 
-        with patch('shadow.datetime') as mock_date:
+        with patch('usage.datetime') as mock_date:
             mock_date.today.return_value.strftime.return_value = '2026-01-01'
             results, deltas = self.shadow_service.get_usage_for_servers()
         self.assertEqual(results['user1'], 1)
         self.assertEqual(deltas['user1'], 8000)
 
+    @patch('usage.Usage.db_query')
     @patch('shadow.Shadow.db_query')
-    def test_get_usage_status_and_deltas_wrap_around(self, mock_db_query):
+    def test_get_usage_status_and_deltas_wrap_around(self, mock_shadow_db_query, mock_usage_db_query):
         mock_servers_table = MagicMock()
         mock_servers_table.all.return_value = [{'certname': 'user1', 'server_port': 8001}]
-        mock_db_query.return_value = mock_servers_table
+        mock_shadow_db_query.return_value = mock_servers_table
+
+        mock_usage_table = MagicMock()
+        mock_usage_db_query.return_value = mock_usage_table
+        mock_usage_table.find_one.return_value = {
+            'certname': 'user1', 'raw_usage': 1000, 'short_term': 0, 'long_term': 0}
 
         self.shadow_service.sock = MagicMock()
         self.shadow_service.sock.recv.return_value = b'stat:{"8001": 500}'
-        mock_servers_table.find_one.return_value = {'certname': 'user1', 'usage': 1000}
 
-        with patch('shadow.datetime') as mock_date:
+        with patch('usage.datetime') as mock_date:
             mock_date.today.return_value.strftime.return_value = '2026-01-01'
             results, deltas = self.shadow_service.get_usage_for_servers()
         self.assertEqual(deltas['user1'], 4000)
 
+    @patch('usage.Usage.db_query')
     @patch('shadow.Shadow.db_query')
-    def test_get_usage_status_and_deltas_new_user(self, mock_db_query):
+    def test_get_usage_status_and_deltas_new_user(self, mock_shadow_db_query, mock_usage_db_query):
         mock_servers_table = MagicMock()
         mock_servers_table.all.return_value = [{'certname': 'user1', 'server_port': 8001}]
-        mock_db_query.return_value = mock_servers_table
+        mock_shadow_db_query.return_value = mock_servers_table
+
+        mock_usage_table = MagicMock()
+        mock_usage_db_query.return_value = mock_usage_table
+        mock_usage_table.find_one.return_value = None
 
         self.shadow_service.sock = MagicMock()
         self.shadow_service.sock.recv.return_value = b'stat: {"8001": 100}'
-        mock_servers_table.find_one.return_value = None
 
-        with patch('shadow.datetime') as mock_date:
+        with patch('usage.datetime') as mock_date:
             mock_date.today.return_value.strftime.return_value = '2026-01-01'
             results, deltas = self.shadow_service.get_usage_for_servers()
             self.assertEqual(deltas['user1'], 800)
 
+    @patch('usage.Usage.db_query')
     @patch('shadow.Shadow.db_query')
-    def test_get_usage_status_and_deltas_normal_increase(self, mock_db_query):
+    def test_get_usage_status_and_deltas_normal_increase(self, mock_shadow_db_query, mock_usage_db_query):
         mock_servers_table = MagicMock()
         mock_servers_table.all.return_value = [{'certname': 'user1', 'server_port': 8001}]
-        mock_db_query.return_value = mock_servers_table
+        mock_shadow_db_query.return_value = mock_servers_table
+
+        mock_usage_table = MagicMock()
+        mock_usage_db_query.return_value = mock_usage_table
+        mock_usage_table.find_one.return_value = {
+            'certname': 'user1', 'raw_usage': 100, 'short_term': 0, 'long_term': 0}
 
         self.shadow_service.sock = MagicMock()
         self.shadow_service.sock.recv.return_value = b'stat: {"8001": 200}'
-        mock_servers_table.find_one.return_value = {'certname': 'user1', 'usage': 100}
 
-        with patch('shadow.datetime') as mock_date:
+        with patch('usage.datetime') as mock_date:
             mock_date.today.return_value.strftime.return_value = '2026-01-01'
             results, deltas = self.shadow_service.get_usage_for_servers()
             self.assertEqual(deltas['user1'], 800)
 
+    @patch('usage.Usage.db_query')
     @patch('shadow.Shadow.db_query')
-    def test_get_usage_status_and_deltas_socket_error_or_empty(self, mock_db_query):
+    def test_get_usage_status_and_deltas_socket_error_or_empty(self, mock_shadow_db_query, mock_usage_db_query):
         mock_servers_table = MagicMock()
         mock_servers_table.all.return_value = [{'certname': 'user1', 'server_port': 8001}]
-        mock_db_query.return_value = mock_servers_table
+        mock_shadow_db_query.return_value = mock_servers_table
+
+        mock_usage_table = MagicMock()
+        mock_usage_db_query.return_value = mock_usage_table
+        mock_usage_table.find_one.return_value = None
 
         self.shadow_service.sock = MagicMock()
         self.shadow_service.sock.recv.return_value = b'stat: {}'
@@ -413,93 +439,112 @@ class TestShadow(unittest.TestCase):
         results, deltas = self.shadow_service.get_usage_for_servers()
         self.assertEqual(deltas['user1'], -1)
 
+    @patch('usage.Usage.db_query')
     @patch('shadow.Shadow.db_query')
-    def test_get_usage_status_new_day(self, mock_db_query):
+    def test_get_usage_status_new_day(self, mock_shadow_db_query, mock_usage_db_query):
         mock_servers_table = MagicMock()
         mock_servers_table.all.return_value = [{'certname': 'user1', 'server_port': 8001}]
-        mock_db_query.return_value = mock_servers_table
+        mock_shadow_db_query.return_value = mock_servers_table
+
+        mock_usage_table = MagicMock()
+        mock_usage_db_query.return_value = mock_usage_table
+        mock_usage_table.find_one.return_value = {'raw_usage': 100, 'short_term': 0, 'long_term': 0}
 
         self.shadow_service.sock = MagicMock()
         self.shadow_service.sock.recv.return_value = b'stat: {"8001": 150}'
         mock_servers_table.find_one.return_value = {'usage': 100}
 
-        with patch('shadow.datetime') as mock_date:
+        with patch('usage.datetime') as mock_date:
             mock_date.today.return_value.strftime.return_value = '2026-01-02'
             results, deltas = self.shadow_service.get_usage_for_servers()
             self.assertEqual(deltas['user1'], 400)
 
+    @patch('usage.Usage.db_query')
     @patch('shadow.Shadow.db_query')
-    def test_daily_logic_fix_normal_increase(self, mock_db_query):
+    def test_daily_logic_fix_normal_increase(self, mock_shadow_db_query, mock_usage_db_query):
         mock_servers_table = MagicMock()
         mock_servers_table.all.return_value = [{'certname': 'user1', 'server_port': 8001}]
-        mock_db_query.return_value = mock_servers_table
+        mock_shadow_db_query.return_value = mock_servers_table
+
+        mock_usage_table = MagicMock()
+        mock_usage_db_query.return_value = mock_usage_table
+        mock_usage_table.find_one.return_value = {'raw_usage': 100, 'short_term': 0, 'long_term': 0}
 
         self.shadow_service.sock = MagicMock()
         self.shadow_service.sock.recv.return_value = b'stat: {"8001": 200}'
         mock_servers_table.find_one.return_value = {'usage': 100}
 
-        with patch('shadow.datetime') as mock_date:
+        with patch('usage.datetime') as mock_date:
             mock_date.today.return_value.strftime.return_value = '2026-01-01'
             self.shadow_service.get_usage_for_servers()
 
+    @patch('usage.Usage.db_query')
     @patch('shadow.Shadow.db_query')
-    def test_periodic_measurement_accumulation(self, mock_db_query):
+    def test_periodic_measurement_accumulation(self, mock_shadow_db_query, mock_usage_db_query):
         mock_servers_table = MagicMock()
-        mock_periodic_table = MagicMock()
+        mock_usage_table = MagicMock()
         mock_servers_table.all.return_value = [{'certname': 'user1', 'server_port': 8001}]
+        mock_shadow_db_query.return_value = mock_servers_table
 
-        mock_db_query.side_effect = [mock_servers_table, mock_periodic_table]
+        mock_usage_db_query.return_value = mock_usage_table
 
         self.shadow_service.sock = MagicMock()
         self.shadow_service.sock.recv.return_value = b'stat: {"8001": 150}'
-        mock_servers_table.find_one.return_value = {'usage': 100}
-        mock_periodic_table.find_one.return_value = {'usage': 1000}
+        mock_usage_table.find_one.side_effect = [
+            {'raw_usage': 100, 'short_term': 0, 'long_term': 1000},  # get_delta_for_cert
+            {'raw_usage': 100, 'short_term': 0, 'long_term': 1000},  # get_record_for_cert
+        ]
 
         results, deltas = self.shadow_service.get_usage_for_servers(periodic=True)
 
-        mock_periodic_table.update.assert_called()
-        call_args = mock_periodic_table.update.call_args[0][0]
-        self.assertEqual(call_args['usage'], 1050)
-        self.assertEqual(deltas['user1'], 1050)
+        mock_usage_table.upsert.assert_called()
+        call_args = mock_usage_table.upsert.call_args[0][0]
+        self.assertEqual(call_args['long_term'], 1050)
+        self.assertEqual(deltas['user1'], 8400)
 
+    @patch('usage.Usage.db_query')
     @patch('shadow.Shadow.db_query')
-    def test_periodic_measurement_recording(self, mock_db_query):
+    def test_periodic_measurement_recording(self, mock_shadow_db_query, mock_usage_db_query):
         mock_servers_table = MagicMock()
-        mock_periodic_table = MagicMock()
+        mock_usage_table = MagicMock()
         mock_servers_table.all.return_value = [{'certname': 'user1', 'server_port': 8001}]
+        mock_shadow_db_query.return_value = mock_servers_table
 
-        mock_db_query.side_effect = [mock_servers_table, mock_periodic_table]
+        mock_usage_db_query.return_value = mock_usage_table
 
         self.shadow_service.sock = MagicMock()
         self.shadow_service.sock.recv.return_value = b'stat: {"8001": 150}'
 
-        last_time = int(time.time()) - (5 * 3600)
-        mock_servers_table.find_one.return_value = {
-            'usage': 100, 'periodic_usage': 1000, 'last_periodic_time': last_time
-        }
-        mock_periodic_table.find_one.return_value = {'usage': 1000}
+        mock_usage_table.find_one.side_effect = [
+            {'raw_usage': 100, 'short_term': 0, 'long_term': 1000},  # get_delta_for_cert
+            {'raw_usage': 100, 'short_term': 0, 'long_term': 1000},  # get_record_for_cert
+        ]
 
         self.shadow_service.get_usage_for_servers(periodic=True)
 
-        mock_periodic_table.update.assert_called()
-        update_args = mock_periodic_table.update.call_args[0][0]
-        self.assertEqual(update_args['usage'], 1050)
+        mock_usage_table.upsert.assert_called()
+        update_args = mock_usage_table.upsert.call_args[0][0]
+        self.assertEqual(update_args['long_term'], 1050)
 
+    @patch('usage.Usage.db_query')
     @patch('shadow.Shadow.db_query')
-    def test_periodic_measurement_reporting_flag(self, mock_db_query):
+    def test_periodic_measurement_reporting_flag(self, mock_shadow_db_query, mock_usage_db_query):
         mock_servers_table = MagicMock()
-        mock_periodic_table = MagicMock()
+        mock_usage_table = MagicMock()
         mock_servers_table.all.return_value = [{'certname': 'user1', 'server_port': 8001}]
+        mock_shadow_db_query.return_value = mock_servers_table
 
-        mock_db_query.side_effect = [mock_servers_table, mock_periodic_table]
+        mock_usage_db_query.return_value = mock_usage_table
 
         self.shadow_service.sock = MagicMock()
         self.shadow_service.sock.recv.return_value = b'stat: {"8001": 150}'
-        mock_servers_table.find_one.return_value = {'usage': 100}
-        mock_periodic_table.find_one.return_value = {'usage': 1000}
+        mock_usage_table.find_one.side_effect = [
+            {'raw_usage': 100, 'short_term': 0, 'long_term': 1000},  # get_delta_for_cert
+            {'raw_usage': 100, 'short_term': 0, 'long_term': 1000},  # get_record_for_cert
+        ]
 
         results, deltas = self.shadow_service.get_usage_for_servers(periodic=True)
-        self.assertEqual(deltas['user1'], 1050)
+        self.assertEqual(deltas['user1'], 8400)
 
 
 if __name__ == '__main__':
