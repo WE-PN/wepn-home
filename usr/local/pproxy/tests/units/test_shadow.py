@@ -2,7 +2,6 @@ import unittest
 from unittest.mock import MagicMock, patch
 import os
 import sys
-import time
 
 # Setup paths
 up_dir = os.path.normpath(os.path.dirname(os.path.abspath(__file__)) + '/../../')

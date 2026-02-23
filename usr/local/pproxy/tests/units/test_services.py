@@ -153,9 +153,9 @@ def test_get_service_creds_summary(mock_logger, mock_all_services):
 def test_get_usage_deltas(mock_logger, mock_all_services):
     s = Services(mock_logger)
     s.services[0]['obj'].get_usage_deltas.return_value = {"s1": 100}
-    res = s.get_usage_deltas(True)
+    res = s.get_usage_deltas(True, True)
     assert res == {"s1": 100}
-    s.services[0]['obj'].get_usage_deltas.assert_called_with(True)
+    s.services[0]['obj'].get_usage_deltas.assert_called_with(True, True)
 
 
 def test_get_usage_status_summary(mock_logger, mock_all_services):
