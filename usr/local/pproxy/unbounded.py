@@ -124,7 +124,7 @@ class Unbounded(Service):
             bits = -1
         return bits
 
-    def get_usage_deltas(self, clear_counters=False):
+    def get_usage_deltas(self, long_term=False, clear_counters=False):
         device = Device(self.logger)
         bits = max(self.get_usage_bits(device), 0)
         if clear_counters:

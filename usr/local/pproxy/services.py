@@ -140,10 +140,10 @@ class Services:
                     creds.update(res)
         return creds
 
-    def get_usage_deltas(self, clear_counters=False):
+    def get_usage_deltas(self, long_term=False, clear_counters=False):
         deltas = {}
         for service in self.services:
-            delta = service['obj'].get_usage_deltas(clear_counters)
+            delta = service['obj'].get_usage_deltas(long_term, clear_counters)
             if bool(delta):   # check if there are any friends
                 deltas.update(delta)
         return deltas

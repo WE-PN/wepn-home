@@ -323,6 +323,11 @@ class Shadow(Service):
         self.logger.debug("Usage summary: " + str(usage))
         return usage
 
+    def get_usage_deltas(self, long_term=False, clear_counters=False):
+        usage, deltas = self.get_usage_for_servers(
+            periodic=long_term, clear_counters=clear_counters)
+        return deltas
+
     def get_usage_for_servers(self, periodic=False, clear_counters=False):
         """
         This is used to calculate if any of the certnames have been in used.
