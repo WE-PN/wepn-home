@@ -231,7 +231,7 @@ else:
 
 # GCM is required, but older shadowsocks doesn't support it
 config.set('shadow', 'method', 'aes-256-gcm')
-status.set('status', 'sw', '1.20.5')
+status.set('status', 'sw', '1.20.6')
 
 with open(CONFIG_FILE, 'w') as configfile:
     config.write(configfile)
