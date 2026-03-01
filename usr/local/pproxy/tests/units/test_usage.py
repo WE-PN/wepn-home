@@ -23,7 +23,7 @@ class TestUsage(unittest.TestCase):
         self.mock_restore = MagicMock(return_value=True)
         self.usage_instance = usage.Usage(
             self.mock_logger,
-            usage_type="shadowsocks",
+            service_type="shadowsocks",
             config=self.mock_config,
             restore_callback=self.mock_restore
         )
