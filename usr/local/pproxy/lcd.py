@@ -126,6 +126,8 @@ class LCD:
         # despite documentation otherwise, reading from OUTPUT
         # seems to set it to high
         # `raspi-gpio set 26 op pn dl && raspi-gpio get 26`
+        if not self.lcd_present:
+            return False
         GPIO.setmode(GPIO.BCM)
         GPIO.setup(self.BL, GPIO.IN)
         return (GPIO.input(self.BL) == GPIO.HIGH)
