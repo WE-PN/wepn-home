@@ -10,6 +10,7 @@ import sys as system
 
 from device import Device
 from service import Service
+from usage import Usage
 
 CONFIG_FILE = '/etc/pproxy/config.ini'
 USERS_DIR = "/var/local/pproxy/users/"
@@ -21,6 +22,7 @@ class Wireguard(Service):
     def __init__(self, logger):
         Service.__init__(self, "wireguard", logger)
         self.system_server_name = "wg-quick@wg0"
+        self.usage = Usage(logger, service_type="wireguard", config=self.config)
         return
 
     def santizie_service_filename(self, filename):
@@ -53,6 +55,7 @@ class Wireguard(Service):
         cmd += self.santizie_service_filename(certname)
         self.logger.debug(cmd)
         self.execute_cmd(cmd)
+        self.del_user_usage(certname)
         return
 
     def forward_all(self):
@@ -102,11 +105,90 @@ class Wireguard(Service):
             creds[d] = hashlib.sha256(self.get_short_link_text(d, ip_address).encode()).hexdigest()[:10]
         return creds
 
+    def get_public_key_for_user(self, certname):
+        cert_dir = self.santizie_service_filename(certname)
+        pubkey_path = USERS_DIR + cert_dir + "/publickey"
+        try:
+            with open(pubkey_path, 'r') as f:
+                return f.read().strip()
+        except Exception:
+            self.logger.exception(f"Could not read public key for {certname}")
+            return None
+
+    def get_current_reading(self):
+        """Get per-certname transfer bytes from wg. Returns dict of certname -> rx+tx bytes."""
+        pubkey_to_certname = {}
+        for certname in self.get_users_list():
+            pubkey = self.get_public_key_for_user(certname)
+            if pubkey:
+                pubkey_to_certname[pubkey] = certname
+        if not pubkey_to_certname:
+            return {}
+        try:
+            result = subprocess.run(  # nosec: fixed args, go.we-pn.com/waiver-1
+                [SRUN, '1', '29'],
+                capture_output=True,
+                timeout=5
+            )
+            if result.returncode != 0:
+                self.logger.error("wg show transfer failed: " + result.stderr.decode())
+                return {}
+            readings = {}
+            for line in result.stdout.decode().splitlines():
+                parts = line.split()
+                if len(parts) == 3:
+                    pubkey, rx, tx = parts
+                    if pubkey in pubkey_to_certname:
+                        readings[pubkey_to_certname[pubkey]] = int(rx) + int(tx)
+            return readings
+        except Exception:
+            self.logger.exception("Could not get WireGuard transfer stats")
+            return {}
+
+    def get_usage_for_servers(self, periodic=False, clear_counters=False):
+        users = self.get_users_list()
+        if not users or not self.is_enabled():
+            return {}, {}
+        usage_deltas = {}
+        usage_statuses = {}
+        current_reading = self.get_current_reading()
+        for certname in users:
+            try:
+                if certname in current_reading:
+                    short_term_delta, long_term_delta, delta = self.usage.update_recorded_usage(
+                        certname=certname,
+                        new_reading=current_reading[certname],
+                        clear_long_term=(clear_counters and periodic),
+                        clear_short_term=(clear_counters and not periodic))
+                    usage_statuses[certname] = 1 if delta > 0 else 0
+                    usage_deltas[certname] = (long_term_delta if periodic else short_term_delta) * 8
+                else:
+                    self.logger.debug(f"No WireGuard reading for peer {certname}")
+                    usage_statuses[certname] = -1
+                    usage_deltas[certname] = -1
+            except Exception as e:
+                self.logger.error(f"Error getting WireGuard usage for {certname}: {e}")
+                usage_statuses[certname] = -1
+                usage_deltas[certname] = -1
+        return usage_statuses, usage_deltas
+
     def get_usage_status_summary(self):
+        users = self.get_users_list()
         usage = {}
-        for d in self.get_users_list():
-            usage[d] = -1
+        for certname in users:
+            try:
+                usage[certname] = 1 if self.usage.get_record_for_cert(certname)['short_term'] > 0 else 0
+            except Exception:
+                self.logger.exception(f"Error getting usage for WireGuard user {certname}")
+                usage[certname] = -1
         return usage
+
+    def get_usage_deltas(self, long_term=False, clear_counters=False):
+        _, deltas = self.get_usage_for_servers(periodic=long_term, clear_counters=clear_counters)
+        return deltas
+
+    def del_user_usage(self, certname):
+        return self.usage.del_user_usage(certname)
 
     def get_usage_daily(self):
         return {}

@@ -6,7 +6,7 @@
 //#define DEBUG
 #define SRV_CNT 7
 #define CMD_CNT 6
-#define SPECIAL_CMD_CNT 29
+#define SPECIAL_CMD_CNT 30
 
 char* _sanitize(char input[], short type) {
 	static char ok_chars[] = "abcdefghijklmnopqrstuvwxyz"
@@ -97,6 +97,7 @@ int main(int argc, char * argv[])
 	scommands[26]= "/usr/bin/apt-get -y -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confnew\" -f install wepn-unbounded";
 	scommands[27]= "/usr/bin/apt-get -y -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confnew\" -f install cloudflare-warp";
 	scommands[28]= "/usr/bin/apt-get -y -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confnew\" -f install redsocks";
+	scommands[29]= "/usr/bin/wg show wg0 transfer";
 
 	int c,s,t;
 
