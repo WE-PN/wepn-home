@@ -12,9 +12,10 @@ __pycache__/
 *.sig
 *.wav
 *.priv
+.claude/
+.claude.json
 
 .bash_history
-.claude/
 .venv
 .viminfo
 .vim/
