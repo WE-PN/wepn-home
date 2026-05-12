@@ -311,7 +311,7 @@ then
 	chgrp wepn-web wepn-local.*
 	chgrp wepn-web .
 	chmod 660  wepn-local.*
-	chmod 660 .
+	chmod 770 .
 else
 	echo "No need to generate new certificate for API server"
 fi

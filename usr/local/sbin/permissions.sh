@@ -72,7 +72,7 @@ chown wepn-api $PPROXY_HOME/local_server/wepn-local.*
 chgrp wepn-web $PPROXY_HOME/local_server/wepn-local.*
 chgrp wepn-web $PPROXY_HOME/local_server/
 chmod g+r $PPROXY_HOME/local_server/wepn-local.*
-chmod g+r $PPROXY_HOME/local_server/.
+chmod 770 $PPROXY_HOME/local_server/.
 chown shadowsocks:shadow-runners /etc/shadowsocks-libev/config.json
 chmod 775 /etc/shadowsocks-libev/config.json
 chown pproxy:shadow-runners /var/local/pproxy/shadow/shadow.sock
