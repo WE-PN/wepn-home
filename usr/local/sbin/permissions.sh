@@ -63,6 +63,13 @@ chown pproxy:pproxy $REMOTE_KEY
 chmod 0600 $REMOTE_KEY
 chown pproxy:shadow-runners /var/local/pproxy/shadow.db*
 chmod 664 /var/local/pproxy/shadow.db*
+# WAL/SHM files created by wepn-api (read-only user) block pproxy writes; remove them
+# and let pproxy's _ensure_db_delete_journal() switch to DELETE journal mode on next start.
+for f in /var/local/pproxy/shadow.db-wal /var/local/pproxy/shadow.db-shm; do
+	if [ -f "$f" ] && [ "$(stat -c '%U' $f)" != "pproxy" ]; then
+		rm -f "$f"
+	fi
+done
 touch /var/local/pproxy/tor.db
 chown pproxy:shadow-runners /var/local/pproxy/tor.db*
 chmod 664 /var/local/pproxy/tor.db*

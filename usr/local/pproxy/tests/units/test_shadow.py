@@ -120,7 +120,9 @@ class TestShadow(unittest.TestCase):
         with patch('shadow.Device'):
             self.shadow_service.sock = MagicMock()
             self.shadow_service.delete_user('user1')
-        self.assertEqual(mock_db_query.call_count, 2)
+        self.assertEqual(mock_db_query.call_count, 1)
+        mock_table.delete.assert_called_once_with(certname='user1')
+        mock_table.db.close.assert_called_once()
 
     @patch('shadow.Shadow.db_query')
     def test_get_max_port_uses_db_query(self, mock_db_query):

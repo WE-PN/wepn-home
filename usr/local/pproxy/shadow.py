@@ -35,6 +35,7 @@ class Shadow(Service):
         self.usage = Usage(logger, service_type="shadowsocks",
                            config=self.config, restore_callback=self.restore)
         atexit.register(self.cleanup)
+        self._ensure_db_delete_journal()
         fd, self.socket_path = tempfile.mkstemp()
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -65,11 +66,31 @@ class Shadow(Service):
         except Exception:
             self.logger.exception("could not clear socket")
 
+    def _ensure_db_delete_journal(self):
+        # WAL journal mode causes permission conflicts: wepn-api (read-only) creates
+        # shadow.db-wal and shadow.db-shm with wepn-api ownership, blocking pproxy
+        # from writing. DELETE mode has no persistent WAL/SHM files.
+        try:
+            import sqlite3 as _sqlite3
+            db_path = self.config.get('shadow', 'db-path')
+            for suffix in ['-wal', '-shm']:
+                f = db_path + suffix
+                if os.path.exists(f) and not os.access(f, os.W_OK):
+                    os.remove(f)
+                    self.logger.warning("Removed inaccessible shadow DB file: " + f)
+            conn = _sqlite3.connect(db_path)
+            conn.execute('PRAGMA journal_mode=DELETE')
+            conn.close()
+        except Exception:
+            self.logger.exception("Error switching shadow DB to DELETE journal mode")
+
     def add_user(self, cname, ip_address, password, unused_port, lang):
         is_new_user = False
         # Use db_query to find the user
         table = self.db_query('servers', return_table=True)
-        server = table.find_one(certname=cname) if table else None
+        server = table.find_one(certname=cname) if table is not None else None
+        if table is not None:
+            table.db.close()
 
         if server is None:
             is_new_user = True
@@ -95,8 +116,10 @@ class Shadow(Service):
         self.start_server(new_server)
 
         table = self.db_query('servers', return_table=True)
-        table.upsert({'certname': cname, 'server_port': port, 'password': password, 'language': lang},
-                     ['certname'])
+        if table is not None:
+            table.upsert({'certname': cname, 'server_port': port, 'password': password, 'language': lang},
+                         ['certname'])
+            table.db.close()
 
         all_servers = self.db_query('servers')
         if all_servers:
@@ -112,7 +135,7 @@ class Shadow(Service):
     def delete_user(self, cname):
         # stop the service for that cert
         table = self.db_query('servers', return_table=True)
-        server = table.find_one(certname=cname) if table else None
+        server = table.find_one(certname=cname) if table is not None else None
         if server is not None:
             port = server['server_port']
             cmd = 'remove : {"server_port": ' + str(server['server_port']) + ' } '
@@ -120,14 +143,15 @@ class Shadow(Service):
             self.logger.info("socket response to delete:"
                              + str(self.sock.recv(1056)))
 
-            table = self.db_query('servers', return_table=True)
-            if table:
+            if table is not None:
                 table.delete(certname=cname)
 
             self.logger.info('disabling port forwarding to port ' + str(port))
             device = Device(self.logger)
             device.close_port(port)
             self.metrics.remove_ports([port, ])
+        if table is not None:
+            table.db.close()
         self.del_user_usage(cname)
         return
 
@@ -178,11 +202,13 @@ class Shadow(Service):
 
         try:
             local_db = dataset.connect(
-                'sqlite:///' + db_path + "?check_same_thread=False")
+                'sqlite:///' + db_path + "?check_same_thread=False",
+                sqlite_wal_mode=False)
 
             if query_str:
-                results = local_db.query(query_str)
-                return list(results)
+                results = list(local_db.query(query_str))
+                local_db.close()
+                return results
 
             if table_name:
                 table = local_db[table_name]
@@ -190,7 +216,9 @@ class Shadow(Service):
                     return table
                 # Trigger a check by doing a count
                 table.count()
-                return list(table.all())
+                results = list(table.all())
+                local_db.close()
+                return results
 
             return local_db
         except Exception as e:
@@ -295,7 +323,9 @@ class Shadow(Service):
             server_address = ip_address
 
         table = self.db_query('servers', return_table=True)
-        server = table.find_one(certname=cname) if table else None
+        server = table.find_one(certname=cname) if table is not None else None
+        if table is not None:
+            table.db.close()
 
         uri64 = "empty"
         digest = ""
@@ -311,8 +341,11 @@ class Shadow(Service):
         # this looks at current period usages
         # 1 means some usage this period, 0 means no usage
         servers = self.db_query('servers', return_table=True)
+        server_list = list(servers.all()) if servers is not None else []
+        if servers is not None:
+            servers.db.close()
         usage = {}
-        for server in servers:
+        for server in server_list:
             certname = server['certname']
             try:
                 usage[certname] = 1 if self.usage.get_record_for_cert(certname)[
@@ -343,13 +376,17 @@ class Shadow(Service):
         5. returns usage deltas and usage statuses
         """
         servers = self.db_query('servers', return_table=True)
-        if not servers or not self.is_enabled():
+        if servers is None or not self.is_enabled():
             self.logger.debug("No servers found for usage")
+            if servers is not None:
+                servers.db.close()
             return {}, {}
+        server_list = list(servers.all())
+        servers.db.close()
         usage_deltas = {}
         usage_statuses = {}
         current_reading = self.get_current_reading()
-        for server in list(servers.all()):
+        for server in server_list:
             try:
                 self.logger.debug("current server name is " + server['certname'])
                 server_name = str(server['server_port'])
@@ -394,7 +431,9 @@ class Shadow(Service):
         count = 0
         while count < 5:
             table = self.db_query('servers', return_table=True)
-            server = table.find_one(certname=cname) if table else None
+            server = table.find_one(certname=cname) if table is not None else None
+            if table is not None:
+                table.db.close()
             if server is not None:
                 uri64, digest = self.create_link_and_hash(
                     server['password'], ip_address, server['server_port'], server['certname'])
@@ -608,13 +647,15 @@ class Shadow(Service):
             return False
         try:
             local_db = dataset.connect(
-                'sqlite:///' + db_path + "?check_same_thread=False")
+                'sqlite:///' + db_path + "?check_same_thread=False",
+                sqlite_wal_mode=False)
             # Try a simple count to see if it triggers an exception
             # This catches the "database disk image is malformed" error during execution
             local_db['servers'].count()
 
             results = local_db.query('pragma integrity_check')
             integrity_check = list(results)
+            local_db.close()
             for check in integrity_check:
                 for result in check.values():
                     # If the db is corrupted
