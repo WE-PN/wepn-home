@@ -57,10 +57,21 @@ def main(prefix_path, pytest_binary):
     sys.exit(result.returncode)
 
 
+FALLBACK_PYTEST = "/var/local/pproxy/wepn-pytest/bin/pytest"
+
+
+def default_pytest():
+    try:
+        import pytest_cov  # noqa: F401
+        return "pytest"
+    except ImportError:
+        return FALLBACK_PYTEST
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="The runner for pytests with coverage")
     parser.add_argument("--path", type=str, default="./", help="The path to source files.")
-    parser.add_argument("--pytest", type=str, default="pytest", help="The path to the pytest.")
+    parser.add_argument("--pytest", type=str, default=default_pytest(), help="The path to the pytest.")
 
     args = parser.parse_args()
 
