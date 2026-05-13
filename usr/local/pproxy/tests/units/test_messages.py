@@ -238,6 +238,21 @@ def test_send_msg_failure(mock_post, messages_instance):
     
     messages_instance.logger.critical.assert_called()
 
+@patch('requests.get')
+def test_get_messages_network_error_propagates(mock_get, messages_instance):
+    mock_get.side_effect = ConnectionError('network down')
+    with pytest.raises(ConnectionError):
+        messages_instance.get_messages()
+
+
+def test_decrypt_message_tampered_ciphertext_raises(messages_instance):
+    # Valid nonce and key, but garbage ciphertext → GCM authentication fails
+    nonce = base64.urlsafe_b64encode(b'\x00' * 12).decode()
+    bad_msg = base64.urlsafe_b64encode(b'garbage_not_encrypted_data').decode()
+    with pytest.raises(Exception):
+        messages_instance.decrypt_message(bad_msg, nonce)
+
+
 def test_encrypt_decrypt_cycle(messages_instance):
     original_text = "This is a test message for encryption"
     encrypted, nonce = messages_instance.encrypt_message(original_text)

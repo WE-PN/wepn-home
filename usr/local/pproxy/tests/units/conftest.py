@@ -20,7 +20,7 @@ def pytest_configure(config):
         'pystemd', 'pystemd.systemd1', 'distro', 'netifaces', 'psutil',
         'upnpclient', 'packaging', 'packaging.version', 'qrcode',
         'sqlalchemy', 'sqlalchemy.exc', 'dataset', 'sanitize_filename',
-        'getmac'
+        'getmac', 'paho', 'paho.mqtt', 'paho.mqtt.client',
     ]
 
     all_mocks = pil_mocks + hardware_mocks

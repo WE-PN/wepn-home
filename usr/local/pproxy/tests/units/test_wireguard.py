@@ -166,5 +166,55 @@ class TestWireguardUsage(unittest.TestCase):
         self.wg.usage.del_user_usage.assert_called_once_with('alice')
 
 
+class TestWireguardUserRegistration(unittest.TestCase):
+
+    def setUp(self):
+        self.mock_logger = MagicMock()
+        with patch('wireguard.Service.__init__'), patch('wireguard.Usage'):
+            self.wg = wireguard.Wireguard.__new__(wireguard.Wireguard)
+            self.wg.logger = self.mock_logger
+            self.wg.config = MagicMock()
+            self.wg.usage = MagicMock()
+            self.wg.name = "wireguard"
+
+    # --- is_user_registered ---
+
+    @patch('wireguard.Wireguard.santizie_service_filename', return_value='alice')
+    @patch('wireguard.os.path.exists', return_value=True)
+    def test_is_user_registered_true(self, mock_exists, mock_sanitize):
+        self.assertTrue(self.wg.is_user_registered('alice'))
+
+    @patch('wireguard.Wireguard.santizie_service_filename', return_value='alice')
+    @patch('wireguard.os.path.exists', return_value=False)
+    def test_is_user_registered_false(self, mock_exists, mock_sanitize):
+        self.assertFalse(self.wg.is_user_registered('alice'))
+
+    # --- get_external_ip_port_in_conf ---
+
+    @patch('wireguard.Wireguard.get_user_config_file_path',
+           return_value='/var/local/pproxy/users/alice/wg.conf')
+    def test_get_external_ip_port_valid_endpoint(self, mock_path):
+        conf = '[Peer]\nEndpoint = 1.2.3.4:51820\nPublicKey = abc\n'
+        with patch('builtins.open', mock_open(read_data=conf)):
+            ip, port = self.wg.get_external_ip_port_in_conf('alice')
+        self.assertEqual(ip, '1.2.3.4')
+        self.assertEqual(port, 51820)
+
+    @patch('wireguard.Wireguard.get_user_config_file_path',
+           return_value='/var/local/pproxy/users/alice/wg.conf')
+    def test_get_external_ip_port_malformed_endpoint(self, mock_path):
+        conf = '[Peer]\nEndpoint = badvalue\nPublicKey = abc\n'
+        with patch('builtins.open', mock_open(read_data=conf)):
+            ip, port = self.wg.get_external_ip_port_in_conf('alice')
+        self.assertIsNone(ip)
+        self.assertIsNone(port)
+
+    @patch('wireguard.Wireguard.get_user_config_file_path', return_value=None)
+    def test_get_external_ip_port_user_not_registered(self, mock_path):
+        ip, port = self.wg.get_external_ip_port_in_conf('unknown')
+        self.assertIsNone(ip)
+        self.assertIsNone(port)
+
+
 if __name__ == '__main__':
     unittest.main()
