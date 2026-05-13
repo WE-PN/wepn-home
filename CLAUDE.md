@@ -52,6 +52,25 @@ python tests/run_tests_with_coverage.py
 
 `usr/local/pproxy/tests/regression/` — end-to-end smoke tests that verify basic Pod operation. **Can only run on a real Pod.** They have their own venv at `usr/local/pproxy/tests/regression/regenv/`.
 
+**Running:**
+```bash
+cd usr/local/pproxy/tests/regression
+bash run_tests.sh          # single run — handles unclaim and wepn-api reset automatically
+bash run_tests_debug.sh    # 10 consecutive runs with per-run logs and analysis
+```
+
+**Critical constraints when modifying regression tests:**
+
+- **`pytest-dependency` + `pytest-retry` conflict:** When a test that other tests depend on fails its first attempt and is retried, `pytest-dependency` still marks it as failed and skips all downstream tests — even if the retry ultimately passes. This causes the effective test count to silently collapse from 24 to 8. Tests that gate large dependency chains (`test_login`, `test_claim`) must never rely on retry to pass — use `wait_until` internally or ensure the environment is stable before pytest starts. This is why `run_tests.sh` and `run_tests_debug.sh` sleep 20s after `wepn-run 1 1` before running pytest.
+
+- **MQTT propagation delays:** pproxy learns about friend add/delete and claim/unclaim events via MQTT, then writes results to `shadow.db` and `status.ini`. These side-effects can lag 30–180+ seconds behind the backend API call. Tests that poll for them use `wait_until(..., timeout=240)` — do not reduce these timeouts; they are not being conservative.
+
+- **wepn-api `exposed` flag:** `test_simulate_web_exposure` (the last test) sets a module-level `exposed=True` in the Flask/uWSGI process which causes all auth-protected local API endpoints to return 503 instead of 401. This persists until the process restarts. `run_tests.sh` calls `wepn-run 1 1` before the suite specifically to reset this. Unexpected 503s from `https://127.0.0.1:5000` in tests are almost always this flag — restart wepn-api to clear it.
+
+- **OAuth rate limiting:** Running 6+ consecutive full-suite iterations in quick succession can trigger the backend's rate limiter on the test account's OAuth endpoint, causing `test_login` to fail with `KeyError: 'access_token'` on all attempts. `run_tests_debug.sh` includes a 60s inter-run cooldown for this reason. If you see this in a single `run_tests.sh` invocation, wait 5–10 minutes before retrying.
+
+Detailed flakiness analysis and per-test fix history: `tests/regression/handoff.md`.
+
 ### Runners (Development Aids)
 
 `usr/local/pproxy/tests/runners/` — informal proof-of-concept scripts used during development to validate a specific area (e.g., `shadow_diag.py`, `test_mqtt.py`, `lcd_test.py`). These are **not real tests**: no mocks required, no formal structure. When developing a feature, you can freely add new runner scripts here or update existing ones to validate your work in progress.
