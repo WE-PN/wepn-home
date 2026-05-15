@@ -57,9 +57,9 @@ class Messages():
                         msg_txt = msg["message_body"]["message"]
                         msg["message_body"]["decrypted"] = self.decrypt_message(msg_txt, msg_nonce)
             except KeyError as e:
-                print("key not found:" + str(e))
+                self.logger.warning("key not found:" + str(e))
             except Exception as d:
-                print("key not found:" + str(d))
+                self.logger.warning("key not found:" + str(d))
             all_messages.append(msg)
         return all_messages
 

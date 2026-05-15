@@ -61,7 +61,7 @@ class LEDManager():
         pass
 
     def __del__(self):
-        print("DEAD")
+        self.logger.info("DEAD")
         self.pixels.fill((0, 0, 0))
         self.pixels.show()
 
@@ -376,15 +376,15 @@ if __name__ == '__main__':
                     t = Thread(target=lm.run_command, args=(incoming,))
                     t.start()
         except KeyboardInterrupt:
-            print('Interrupted')
+            print('Interrupted')  # noqa: T201
             server.close()
             lm.__del__()
             try:
                 sys.exit(0)
             except SystemExit:
                 os._exit(0)
-    print("Shutting down...")
+    lm.logger.info("Shutting down...")
     server.close()
     os.remove(LM_SOCKET_PATH)
     lm.__del__()
-    print("Done")
+    lm.logger.info("Done")

@@ -58,7 +58,7 @@ class LEDClient:
         if self.client is None:
             return
         if brightness < 0 or brightness > 1:
-            print("brightness must be between 0 and 1")
+            logger.warning("brightness must be between 0 and 1")
             return
         self.send("set_brightness " +
                   str(brightness))
@@ -196,10 +196,10 @@ def main():
     lc.set_enabled(True)
     lc.set_all((255, 255, 255))
     time.sleep(1)
-    print("white ring must glow for 1 second")
+    print("white ring must glow for 1 second")  # noqa: T201
     lc.set_enabled(False)
     lc.set_all((255, 0, 0))
-    print("red ring must NOT glow for 1 second")
+    print("red ring must NOT glow for 1 second")  # noqa: T201
     time.sleep(1)
     lc.set_enabled(True)
     lc.blank()

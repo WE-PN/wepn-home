@@ -33,14 +33,14 @@ def get_installed_pip_packages():
                     packages[package_name] = version_number
         return packages
     except subprocess.CalledProcessError as e:
-        print(f"Error running pip command: {e}")
-        print(f"Stderr: {e.stderr}")
+        print(f"Error running pip command: {e}")  # noqa: T201
+        print(f"Stderr: {e.stderr}")  # noqa: T201
         return {}
     except FileNotFoundError:
-        print("Error: 'pip' command not found. Make sure Python and pip are installed and in your PATH.")
+        print("Error: 'pip' command not found. Make sure Python and pip are installed and in your PATH.")  # noqa: T201
         return {}
     except Exception as e:
-        print(f"An unexpected error occurred: {e}")
+        print(f"An unexpected error occurred: {e}")  # noqa: T201
         return {}
 
 
@@ -78,10 +78,10 @@ if __name__ == "__main__":
                             need_install.append(line)
 
                 except Exception as e:
-                    print(str(e))
+                    print(str(e))  # noqa: T201
                     need_install.append(line)
 
-        print(f"writing to {output_file}")
+        print(f"writing to {output_file}")  # noqa: T201
         with open(output_file, "w") as output:
             for item in need_install:
                 output.write(item + "\n")
@@ -89,5 +89,5 @@ if __name__ == "__main__":
                 output.write(item + "\n")
         sys.exit(0)
     except Exception as e:
-        print("exception : " + str(e))
+        print("exception : " + str(e))  # noqa: T201
         sys.exit(1)

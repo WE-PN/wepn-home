@@ -174,10 +174,8 @@ class TestWStatus(unittest.TestCase):
         # Coverage for naked except in set()
         ws = WStatus(self.mock_logger)
         with patch.object(ws, 'set_field', side_effect=Exception("Boom")):
-            # Should catch and print (stdout), not crash
-            with patch('builtins.print') as mock_print:
-                ws.set('f', 'v')
-                mock_print.assert_called()
+            ws.set('f', 'v')
+            self.mock_logger.warning.assert_called()
 
     def test_get_defaults(self):
         ws = WStatus(self.mock_logger)

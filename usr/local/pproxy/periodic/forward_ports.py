@@ -35,12 +35,11 @@ status = WStatus(logger)
 local_token = status.get_field('status', 'local_token')
 url = "https://" + external_ip + ":5000/api/v1/port_exposure/check"
 
-print(url)
+logger.info(url)
 try:
     r = requests.post(url,
                       data={'local_token': str(local_token)}, timeout=1, verify=False)  # nosec: local cert, http://go.we-pn.com/waiver-3
 
-    print(r.text)
+    logger.info(r.text)
 except:
-    print("OK: API port is not reachable externally.")
-
+    logger.info("OK: API port is not reachable externally.")

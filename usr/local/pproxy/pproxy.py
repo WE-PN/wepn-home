@@ -27,7 +27,7 @@ try:
     from pad4pi import rpi_gpio
     gpio_up = True
 except Exception as err:
-    print("Error in GPIO: " + str(err))
+    print("Error in GPIO: " + str(err))  # noqa: T201
     gpio_up = False
 
 from device import Device

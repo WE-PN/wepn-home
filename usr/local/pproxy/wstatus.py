@@ -62,7 +62,7 @@ class WStatus:
         try:
             self.set_field('status', field, value)
         except:
-            print("Unknown field to write:" + field)
+            self.logger.warning("Unknown field to write:" + field)
 
     def set_field(self, section, field, value):
         if not isinstance(value, str):

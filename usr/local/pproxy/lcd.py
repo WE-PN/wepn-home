@@ -6,7 +6,7 @@ try:
     import board
     import digitalio
 except Exception as err:
-    print("Possibly unsupported board: " + str(err))
+    print("Possibly unsupported board: " + str(err))  # noqa: T201
 
 from PIL import Image
 from PIL import ImageDraw
@@ -47,6 +47,7 @@ if gpio_enable:
 
 class LCD:
     def __init__(self):
+        self.logger = logging.getLogger("lcd")
         self.config = configparser.ConfigParser()
         self.config.read(CONFIG_FILE)
         self.logo_text = None
@@ -80,7 +81,7 @@ class LCD:
             if (GPIO.getmode() != 11):
                 GPIO.setmode(GPIO.BCM)
         else:
-            print("Error: GPIO not set")
+            self.logger.warning("Error: GPIO not set")
         # proper fix incoming: version is sometimes not set right
         self.width = 240
         self.height = 240
@@ -316,14 +317,14 @@ class LCD:
                 frame = frame.resize((240, 240))
                 frames.append(frame)
         loops = 1
-        print(len(frames))
+        self.logger.debug(len(frames))
         while (loops <= loop_count):
-            print(loops)
+            self.logger.debug(loops)
             try:
                 for frame in frames:
                     self.lcd.image(frame)
             except Exception as e:
-                print(e)
+                self.logger.error(e)
             loops += 1
         self.clear()
         self.set_backlight(prev_backlight)

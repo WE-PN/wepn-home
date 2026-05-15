@@ -105,8 +105,8 @@ retried_tests=" > "$run_dir/result.ini"
         --self-contained-html \
         2>&1 | tee "$run_dir/output.log"
     local pytest_exit=${PIPESTATUS[0]}
-    # 60s cooldown — prevents OAuth rate limiting across back-to-back runs
-    sleep 60
+    # 120s cooldown — prevents OAuth rate limiting across back-to-back runs
+    sleep 120
 
     end_ts=$(date +%s)
     duration=$((end_ts - start_ts))
@@ -242,6 +242,14 @@ s = []
 
 if passes < n:
     s.append(f"Pass rate {passes}/{n} ({passes/n*100:.0f}%) — investigate root causes before reducing retries.")
+
+# Flag runs where most tests were silently skipped due to a gating-test cascade
+EXPECTED_TESTS = 24
+cascade_runs = [r['run'] for r in runs if int(r.get('passed', 0)) < EXPECTED_TESTS // 2
+                and r.get('status') != 'SKIPPED']
+if cascade_runs:
+    s.append(f"Runs {cascade_runs} had suspiciously low pass counts (<{EXPECTED_TESTS//2} tests) — "
+             f"likely a gating-test (test_login/test_claim) retry cascade that silently skipped most of the suite.")
 
 for test, fruns in sorted(all_failures.items(), key=lambda x: -len(x[1])):
     pct = len(fruns) / n * 100

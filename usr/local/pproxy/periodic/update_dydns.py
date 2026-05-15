@@ -1,20 +1,25 @@
+import logging.config
 import requests
 try:
     from self.configparser import configparser
 except ImportError:
     import configparser
+
+LOG_CONFIG = "/etc/pproxy/logging.ini"
+logging.config.fileConfig(LOG_CONFIG, disable_existing_loggers=False)
+logger = logging.getLogger("periodic-dydns")
 CONFIG_FILE = '/etc/pproxy/config.ini'
 config = configparser.ConfigParser()
 config.read(CONFIG_FILE)
 
 if config.has_section("dyndns") and config.getboolean('dyndns', 'enabled'):
     # we have good DDNS, lets use it
-    #self.logger.debug(self.config['dydns'])
+    # self.logger.debug(self.config['dydns'])
     server_address = config.get("dyndns", "url")
     url = server_address.format(
-            config.get("dyndns", "username"),
-            config.get("dyndns", "password"),
-            config.get("dyndns", "hostname"))
+        config.get("dyndns", "username"),
+        config.get("dyndns", "password"),
+        config.get("dyndns", "hostname"))
 
     headers = requests.utils.default_headers()
 
@@ -24,5 +29,5 @@ if config.has_section("dyndns") and config.getboolean('dyndns', 'enabled'):
         }
     )
 
-    response = requests.get(url, headers=headers)
-    print(response)
+    response = requests.get(url, headers=headers, timeout=10)
+    logger.info(str(response))

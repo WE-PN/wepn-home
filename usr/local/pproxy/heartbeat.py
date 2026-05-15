@@ -136,7 +136,7 @@ class HeartBeat:
             local_ip = device.get_local_ip()
             sys_info = device.get_system_health_stats(),
         except Exception as e:
-            print(e)
+            self.logger.error(e)
             if local_ip is None:
                 local_ip = "127.0.0.1"
             if sys_info is None:

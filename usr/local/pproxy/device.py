@@ -137,7 +137,6 @@ class Device():
                     return self.check_igd_supports_portforward(d)
                 except Exception as err:
                     self.logger.critical("IGD found, missing attributes: " + str(err))
-                    print(err)
                     pass
         else:
             self.logger.error("No IGDs found")
@@ -191,7 +190,7 @@ class Device():
                 out, err = sp.communicate()
                 sp.wait()
                 if err:
-                    print("error in sp.communicate: \n" + str(err))
+                    self.logger.error("error in sp.communicate: \n" + str(err))
                     time.sleep(3)
                     failed += 1
             return out, err, failed, sp
@@ -541,9 +540,9 @@ class Device():
         result = response.json()
 
         if result['success']:
-            print(f"Successfully updated record to {ip_address}")
+            self.logger.info(f"Successfully updated record to {ip_address}")
         else:
-            print(f"Failed to update record: {result['errors']}")
+            self.logger.error(f"Failed to update record: {result['errors']}")
 
     def _update_dns_ddns(self, ip_address):
         # NOIP code from https://github.com/quleuber/no-ip-updater/blob/master/no_ip_updater/noip.py
@@ -572,7 +571,6 @@ class Device():
                     if r.content.find(key.encode('utf-8')) == 0:
                         self.logger.error(message)
             except AttributeError:
-                print(r.content)
                 self.logger.error(r.content)
 
     def wait_for_internet(self, retries=100, timeout=10):
@@ -1061,7 +1059,7 @@ class Device():
             with open(ERROR_LOG_FILE + ".1", 'r') as error_log:
                 contents += error_log.read()
         except FileNotFoundError as err:
-            print("Not enough logs, returning what was there" + str(err))
+            self.logger.warning("Not enough logs, returning what was there" + str(err))
             pass
         return contents
 
@@ -1087,7 +1085,7 @@ class Device():
             hd = disk_usage.total
             hd_used = disk_usage.used
         except Exception as e:
-            print(e)
+            self.logger.error(e)
             hd = 0
             hd_used = 0
         sys_info = {

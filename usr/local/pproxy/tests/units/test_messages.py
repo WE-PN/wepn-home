@@ -150,14 +150,11 @@ def test_get_messages_key_error(mock_get, messages_instance):
     ]
     mock_get.return_value = mock_response
 
-    # Capture stdout to verify print
-    with patch('builtins.print') as mock_print:
-        msgs = messages_instance.get_messages()
-        assert len(msgs) == 1
-        # Verify print was called with "key not found"
-        # The code prints: "key not found:" + str(e)
-        assert mock_print.called
-        assert "key not found" in mock_print.call_args[0][0]
+    msgs = messages_instance.get_messages()
+    assert len(msgs) == 1
+    # Verify logger.warning was called with "key not found"
+    assert messages_instance.logger.warning.called
+    assert "key not found" in messages_instance.logger.warning.call_args[0][0]
 
 @patch('requests.patch')
 def test_mark_msg_read_success(mock_patch, messages_instance):

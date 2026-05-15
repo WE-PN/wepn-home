@@ -49,4 +49,4 @@ try:
     updated_version = updated_config["config"]["config_version"]
     services.save_server_config_version(updated_version)
 except requests.exceptions.RequestException as exception_error:
-    print("Error in sending heartbeat: \r\n\t" + str(exception_error))
+    logger.error("Error in sending heartbeat: \r\n\t" + str(exception_error))

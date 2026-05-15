@@ -169,14 +169,14 @@ def run_diag():
     local_ip = device.get_local_ip()
     port = 4091
 
-    print('local ip=' + local_ip)
+    logger.info('local ip=' + local_ip)
 
     internet = WPD.is_connected_to_internet()
-    print('internet: ' + str(internet))
+    logger.info('internet: ' + str(internet))
     service = WPD.is_connected_to_service()
-    print('service: ' + str(service))
+    logger.info('service: ' + str(service))
     error_code = WPD.get_error_code(port)
-    print('device status code: ' + str(error_code))
+    logger.info('device status code: ' + str(error_code))
 
     s_resp = WPD.get_server_diag_analysis(error_code)
     WPD.close_test_port(port)
@@ -192,7 +192,7 @@ def check_port_available_externally():
         return "Not accessible", http_status.HTTP_401_UNAUTHORIZED
     global exposed
     exposed = True
-    print("EXPOSED!!!!")
+    logger.warning("EXPOSED!!!!")
     return "ERROR: Exposure detected! APIs are closed now.",\
         http_status.HTTP_503_SERVICE_UNAVAILABLE
 

@@ -36,6 +36,6 @@ try:
         ONBOARD = OnBoard()
         ONBOARD.start()
 except Exception as e:
-    print("Error caught in debug:")
-    print(type(e).__name__)
+    logger.error("Error caught in debug:")
+    logger.error(type(e).__name__)
     raise

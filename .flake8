@@ -13,7 +13,7 @@ max-line-length = 100
 #   https://github.com/PyCQA/flake8-bugbear#list-of-warnings
 # * The B950 flake8-bugbear opinionated warning -
 #   https://github.com/PyCQA/flake8-bugbear#opinionated-warnings
-select = C,D,E,F,W,B,B950
+select = C,D,E,F,W,B,B950,T
 # Ignore flake8's default warning about maximum line length, which has
 # a hard stop at the configured value.  Instead we use
 # flake8-bugbear's B950, which allows up to 10% overage.

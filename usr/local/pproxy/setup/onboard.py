@@ -22,7 +22,7 @@ try:
     from pad4pi import rpi_gpio
     gpio_up = True
 except Exception as err:
-    print("Error in GPIO: " + str(err))
+    print("Error in GPIO: " + str(err))  # noqa: T201
     gpio_up = False
 from lcd import LCD as LCD
 from services import Services
@@ -74,7 +74,7 @@ class OnBoard():
         return
 
     def signal_handler(self, signum, frame):
-        print("Signal " + str(signum) + " is received with frame: " + str(frame))
+        self.logger.debug("Signal " + str(signum) + " is received with frame: " + str(frame))
         signal.signal(signal.SIGUSR1, self.signal_handler)
         self.display_claim_info()
 

@@ -50,7 +50,7 @@ class Tor(Service):
                 servers.delete(certname=cname)
             local_db.close()
         except Exception as e:
-            print("Delete user error: " + str(e))
+            self.logger.error("Delete user error: " + str(e))
             pass
         return
 

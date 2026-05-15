@@ -12,7 +12,7 @@ s.listen(1)
 
 conn, addr = s.accept()
 
-print('Connected by ', addr)
+print('Connected by ', addr)  # noqa: T201
 
 while 1:
     data = conn.recv(32)

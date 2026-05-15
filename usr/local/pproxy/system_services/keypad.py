@@ -2,8 +2,8 @@ try:
     from adafruit_bus_device import i2c_device
     import adafruit_aw9523
 except Exception as e:
-    print("RPi import failed")
-    print(e)
+    print("RPi import failed")  # noqa: T201
+    print(e)  # noqa: T201
 from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
 import board
@@ -75,11 +75,11 @@ class KEYPAD:
         self.led_client = LEDClient()
         if (int(self.config.get('hw', 'button-version'))) == 1:
             # this is an old model, no need for the keypad service
-            print("old keypad")
+            self.logger.info("old keypad")
             self.enabled = False
             return
         else:
-            print("new keypad")
+            self.logger.info("new keypad")
             self.aw = None
             self.init_i2c()
             self.enabled = True
@@ -203,11 +203,11 @@ class KEYPAD:
                     return
 
                 if BUTTONS[index] == "up":
-                    print("Key up on " + str(index))
+                    self.logger.debug("Key up on " + str(index))
                 if BUTTONS[index] == "down":
-                    print("Key down on " + str(index))
+                    self.logger.debug("Key down on " + str(index))
                 if BUTTONS[index] == "back":
-                    print("Key back on " + str(index))
+                    self.logger.debug("Key back on " + str(index))
                     if window_size > 0:
                         back = self.window_stack.pop()
                         self.menu_index = back
@@ -431,7 +431,6 @@ class KEYPAD:
         with open("/var/run/pproxy.pid", "r") as f:
             wepn_pid = int(f.readline())
             self.logger.debug("Signaling main process at: " + str(wepn_pid))
-            print("Signaling main process at: " + str(wepn_pid))
             try:
                 os.kill(wepn_pid, signal.SIGUSR1)
             except ProcessLookupError as process_error:
@@ -656,7 +655,7 @@ class KEYPAD:
         self.render()
 
     def channel_update(self):
-        print("channel_update:" + str(self.dev_remaining) + " channel: " + self.channel)
+        self.logger.debug("channel_update:" + str(self.dev_remaining) + " channel: " + self.channel)
         if self.dev_remaining == 0:
             # 7 clicks done already, switch
             if self.channel == "prod":
@@ -672,7 +671,7 @@ class KEYPAD:
         self.render()
 
     def show_software_version(self):
-        print("show_software_version")
+        self.logger.debug("show_software_version")
         self.display_active = True
         self.set_current_menu(4)
         # ONLY FOR UX DEVELOPMENT, show the git hash
@@ -937,7 +936,7 @@ if __name__ == '__main__':
     try:
         main()
     except KeyboardInterrupt:
-        print('Interrupted')
+        print('Interrupted')  # noqa: T201
         try:
             sys.exit(0)
         except SystemExit:
