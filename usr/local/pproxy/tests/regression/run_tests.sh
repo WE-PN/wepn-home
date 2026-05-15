@@ -8,8 +8,10 @@ then
 	pytest wepn-regression.py  -vv -k 'test_login or test_unclaim'
 	wepn-run 1 1
 fi
-while grep -q CLAIMED $status_file; do 
+while grep -q CLAIMED $status_file; do
 	echo "still claimed, waiting ... ";
-	sleep 5 ; 
+	sleep 5 ;
 done
+wepn-run 1 1
+sleep 20
 pytest wepn-regression.py -vvv -r w --retries 2 --retry-delay 30

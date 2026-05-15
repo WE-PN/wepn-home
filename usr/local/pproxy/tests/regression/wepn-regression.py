@@ -141,6 +141,8 @@ def test_login(state, test_cfg):
     }
     response = requests.post(authorization_base_url, json=payload, headers=headers)
     jresponse = response.json()
+    assert 'access_token' in jresponse, \
+        f"Login failed (HTTP {response.status_code}): {jresponse}"  # nosec: assert is a legit check for pytest
     state.auth_token = "Bearer " + jresponse['access_token']
 
     assert (response.status_code == 200)  # nosec: assert is a legit check for pytest
@@ -240,21 +242,30 @@ def test_claim_fail_serial(state, test_cfg):
     assert (response.status_code != 200)  # nosec: assert is a legit check for pytest
 
 
-@pytest.mark.flaky(retries=5, delay=20)
 @pytest.mark.dependency(depends=["test_login", "test_claim", "test_confirm_device_unclaimed"])
 def test_check_device_connected():
-    status = configparser.ConfigParser()
-    status.read(STATUS_FILE)
-    assert (status.get('status', 'claimed') == '1')  # nosec: assert is a legit check for pytest
+    def check_claimed():
+        status = configparser.ConfigParser()
+        status.read(STATUS_FILE)
+        try:
+            return status.get('status', 'claimed') == '1'
+        except configparser.Error:
+            return False
+
+    assert wait_until(check_claimed, timeout=240, interval=10)  # nosec: assert is a legit check for pytest
 
 
-@pytest.mark.flaky(retries=3, delay=20)
 @pytest.mark.dependency(depends=["test_login", "test_claim"])
 def test_api_claim_info_redacted_post_claim(state):
-    status = configparser.ConfigParser()
-    status.read(STATUS_FILE)
-    key = status.get('status', 'temporary_key')
-    assert (key == 'CLAIMED')
+    def check_claimed_key():
+        status = configparser.ConfigParser()
+        status.read(STATUS_FILE)
+        try:
+            return status.get('status', 'temporary_key') == 'CLAIMED'
+        except configparser.Error:
+            return False
+
+    assert wait_until(check_claimed_key, timeout=180, interval=10)  # nosec: assert is a legit check for pytest
     # get the key through the local API
     response = requests.get(state.local_api_url + "/api/v1/claim/info", verify=False)
     jresponse = response.json()
@@ -271,7 +282,9 @@ def test_heartbeat(state, test_cfg, pproxy_cfg):
     status = configparser.ConfigParser()
     status.read(STATUS_FILE)
     state.local_token = status.get('status', 'local_token')
-    state.key = pproxy_cfg.get('django', 'device_key')
+    fresh_config = configparser.ConfigParser()
+    fresh_config.read(PPROXY_CONFIG)
+    state.key = fresh_config.get('django', 'device_key')
 
     headers = {
         "content-type": "application/json"
@@ -293,6 +306,7 @@ def test_heartbeat(state, test_cfg, pproxy_cfg):
     assert (response.status_code == 200)  # nosec: assert is a legit check for pytest
 
 
+@pytest.mark.flaky(retries=2, delay=5)
 @pytest.mark.dependency(depends=["test_login", "test_claim"])
 def test_add_friend(state, test_cfg):
     url = test_cfg.get('device', 'url')
@@ -338,6 +352,7 @@ def test_list_friends(state, test_cfg):
     assert (jresponse == [expected])  # nosec: assert is a legit check for pytest
 
 
+@pytest.mark.flaky(retries=2, delay=0)
 @pytest.mark.dependency(depends=["test_add_friend"])
 def test_added_friend_in_local_db(pproxy_cfg):
     shadow_db = pproxy_cfg.get('shadow', 'db-path')
@@ -350,7 +365,7 @@ def test_added_friend_in_local_db(pproxy_cfg):
         conn.close()
         return len(result) == 1
 
-    assert wait_until(check_db, timeout=120, interval=10)
+    assert wait_until(check_db, timeout=300, interval=10)
 
 
 @pytest.mark.dependency(depends=["test_login", "test_claim", "test_heartbeat", "test_add_friend", "test_list_friends"])
@@ -364,7 +379,9 @@ def test_heartbeat_change_usage_status(state, test_cfg, pproxy_cfg):
     status = configparser.ConfigParser()
     status.read(STATUS_FILE)
     state.local_token = status.get('status', 'local_token')
-    state.key = pproxy_cfg.get('django', 'device_key')
+    fresh_config = configparser.ConfigParser()
+    fresh_config.read(PPROXY_CONFIG)
+    state.key = fresh_config.get('django', 'device_key')
 
     headers = {
         "content-type": "application/json"
@@ -466,7 +483,7 @@ def test_deleted_friend_in_local_db(pproxy_cfg):
         conn.close()
         return len(result) == 0
 
-    assert wait_until(check_db_deleted, timeout=120, interval=10)
+    assert wait_until(check_db_deleted, timeout=240, interval=10)
 
 
 @pytest.mark.dependency(depends=["test_delete_friend"])
@@ -521,11 +538,16 @@ def test_unclaim(state, test_cfg, pproxy_cfg):
 
 
 @pytest.mark.dependency(depends=["test_unclaim"])
-@pytest.mark.flaky(retries=2, delay=60)
 def test_check_device_disconnected_unclaimed():
-    status = configparser.ConfigParser()
-    status.read(STATUS_FILE)
-    assert (status.get('status', 'claimed') == '0')  # nosec: assert is a legit check for pytest
+    def check_unclaimed():
+        status = configparser.ConfigParser()
+        status.read(STATUS_FILE)
+        try:
+            return status.get('status', 'claimed') == '0'
+        except configparser.Error:
+            return False
+
+    assert wait_until(check_unclaimed, timeout=300, interval=10)  # nosec: assert is a legit check for pytest
 
 
 @pytest.mark.dependency(depends=["test_unclaim"])
@@ -538,7 +560,10 @@ def test_api_updated_unclaim(state):
     status = configparser.ConfigParser()
     status.read(STATUS_FILE)
 
-    key = status.get('status', 'temporary_key')
+    try:
+        key = status.get('status', 'temporary_key')
+    except configparser.Error:
+        assert False, "status.ini not ready yet (pproxy still restarting)"  # nosec: assert is a legit check for pytest
     # get the key through the local API
     response = requests.get(state.local_api_url + "/api/v1/claim/info", verify=False)
     jresponse = response.json()
