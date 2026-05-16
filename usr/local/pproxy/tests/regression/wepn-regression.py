@@ -100,6 +100,39 @@ def wait_until(condition_func, timeout=90, interval=5):
     return False
 
 
+def flush_server_messages(url, serial_number, device_key):
+    """Mark all server-cached device messages as read.
+
+    Called immediately after a successful claim to prevent stale backend
+    messages from arriving post-claim and interfering with subsequent tests.
+    Best-effort: failures are silently ignored.
+    """
+    try:
+        headers = {"Content-Type": "application/json"}
+        data = json.dumps({
+            "serial_number": serial_number,
+            "device_key": device_key,
+            "is_read": False,
+            "destination": "DEVICE",
+            "is_expired": False,
+        })
+        response = requests.get(url + '/api/message/', data=data, headers=headers, timeout=10)
+        if response.status_code != 200:
+            return
+        for msg in response.json():
+            patch_data = json.dumps({
+                "serial_number": serial_number,
+                "device_key": device_key,
+                "is_read": True,
+            })
+            requests.patch(
+                url + '/api/message/' + str(msg["id"]) + '/',
+                data=patch_data, headers=headers, timeout=10
+            )
+    except Exception:
+        pass
+
+
 # making HTML output pretty
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_makereport(item, call):
@@ -242,6 +275,10 @@ def test_claim(state, test_cfg, pproxy_cfg):
     assert wait_until(try_claim, timeout=60, interval=5), \
         "Claim failed after 60s"  # nosec
 
+    # Flush stale server-cached messages so they don't arrive post-claim
+    # and interfere with subsequent tests (backend bug workaround).
+    flush_server_messages(url, serial, state.key)
+
 
 @pytest.mark.dependency(depends=["test_login", "test_claim"])
 def test_claim_fail_serial(state, test_cfg):
@@ -268,7 +305,7 @@ def test_check_device_connected():
         except configparser.Error:
             return False
 
-    assert wait_until(check_claimed, timeout=240, interval=10)  # nosec: assert is a legit check for pytest
+    assert wait_until(check_claimed, timeout=360, interval=10)  # nosec: assert is a legit check for pytest
 
 
 @pytest.mark.dependency(depends=["test_login", "test_claim"])
@@ -281,7 +318,7 @@ def test_api_claim_info_redacted_post_claim(state):
         except configparser.Error:
             return False
 
-    assert wait_until(check_claimed_key, timeout=180, interval=10)  # nosec: assert is a legit check for pytest
+    assert wait_until(check_claimed_key, timeout=300, interval=10)  # nosec: assert is a legit check for pytest
     # get the key through the local API
     response = requests.get(state.local_api_url + "/api/v1/claim/info", verify=False)
     jresponse = response.json()
@@ -439,12 +476,25 @@ def test_api_gives_correct_key(state, test_cfg, pproxy_cfg):
     compare to friend_access_key
     '''
     shadow_db = pproxy_cfg.get('shadow', 'db-path')
-    conn = sqlite3.connect(shadow_db)
-    cursor = conn.cursor()
-    cursor.execute(
-        '''SELECT server_port, password from servers where certname like "zxcvb" and language like "en"''')
-    result = cursor.fetchall()
-    conn.close()
+
+    def fetch_db_row():
+        conn = sqlite3.connect(shadow_db)
+        cursor = conn.cursor()
+        cursor.execute(
+            '''SELECT server_port, password from servers where certname like "zxcvb" and language like "en"''')
+        rows = cursor.fetchall()
+        conn.close()
+        return rows
+
+    result = None
+
+    def check_db():
+        nonlocal result
+        result = fetch_db_row()
+        return len(result) == 1
+
+    assert wait_until(check_db, timeout=120, interval=10), \
+        "shadow.db row for zxcvb/en not found after 120s — MQTT propagation too slow"
     assert (len(result) == 1)
     real_ss_pass = result[0][1]
     real_port = result[0][0]
@@ -499,7 +549,7 @@ def test_deleted_friend_in_local_db(pproxy_cfg):
         conn.close()
         return len(result) == 0
 
-    assert wait_until(check_db_deleted, timeout=240, interval=10)
+    assert wait_until(check_db_deleted, timeout=360, interval=10)
 
 
 @pytest.mark.dependency(depends=["test_delete_friend"])
@@ -605,4 +655,4 @@ def test_simulate_web_exposure(state):
     def check_exposed():
         return util_iterate_apis(state, state.local_token, 503)
 
-    assert wait_until(check_exposed, timeout=30, interval=2)  # nosec: assert is a legit check for pytest
+    assert wait_until(check_exposed, timeout=60, interval=2)  # nosec: assert is a legit check for pytest

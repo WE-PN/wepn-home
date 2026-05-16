@@ -54,6 +54,7 @@ cloud.json
 goog.txt
 
 usr/local/pproxy/pproxy.code-workspace
+usr/local/pproxy/tests/regression/debug_results_*
 
 .Xauthority
 .vscode/

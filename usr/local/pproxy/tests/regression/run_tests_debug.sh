@@ -43,17 +43,51 @@ clean_state() {
 
     # Restart services — resets the 'exposed' global in the wepn-api Flask process
     wepn-run 1 1
-    sleep 20   # 20s: enough for pproxy to re-establish MQTT before test_claim runs
 
-    # Unclaim if needed
+    # Wait for pproxy to cycle through all cached previous keys (onboard-timeout=10s
+    # × 5 keys ≈ 50s) and then settle on a freshly generated random key. 180s leaves
+    # ample margin. This eliminates the race where test_claim registers an old key
+    # while pproxy has already moved on to a different one.
+    log "  Waiting 180s for pproxy to settle on a fresh key..."
+    sleep 180
+
+    # Unclaim if pproxy self-claimed via a cached previous key during the settle period
     if [ "$(get_claimed)" = "1" ]; then
         log "  Device is claimed — running unclaim"
         pytest wepn-regression.py -vv -k 'test_login or test_unclaim' \
             > "$run_dir/preclaim.log" 2>&1
         wepn-run 1 1
-        sleep 20
         wait_for_unclaim || return 1
+        log "  Waiting 180s for pproxy to settle after unclaim..."
+        sleep 180
     fi
+
+    # Confirm pproxy has written its fresh temporary_key (should be immediate after
+    # the 180s settle period above).
+    wait_for_onboard_key() {
+        local timeout=60 elapsed=0
+        while true; do
+            local tmp_key
+            tmp_key=$(python3 -c "
+import configparser, sys
+c = configparser.ConfigParser()
+c.read('$STATUS_FILE')
+try:
+    print(c.get('status', 'temporary_key'))
+except Exception:
+    print('')
+" 2>/dev/null)
+            if [ -n "$tmp_key" ] && [ "$tmp_key" != "CLAIMED" ]; then
+                return 0
+            fi
+            if [ $elapsed -ge $timeout ]; then
+                log "  TIMEOUT: onboard key not ready after ${timeout}s"
+                return 1
+            fi
+            sleep 5; elapsed=$((elapsed + 5))
+        done
+    }
+    wait_for_onboard_key || return 1
 
     # Clear leftover shadow.db rows from any previously interrupted run
     python3 - <<PYEOF 2>&1 | tee -a "$SUMMARY_FILE"
