@@ -199,9 +199,9 @@ class OnBoard():
             time.sleep(sleep_delay)
 
     # The callback for when the client receives a CONNACK response from the server.
-    def on_connect(self, client, userdata, flags, result_code):
-        self.logger.debug("Connected with result code " + str(result_code))
-        if (result_code == 0):
+    def on_connect(self, client, userdata, flags, reason_code, properties=None):
+        self.logger.debug("Connected with result code " + str(reason_code))
+        if (reason_code == 0):
             self.lcd.play_animation("done_checkmark.gif")
             self.logger.critical("* setting device to claimed")
             self.leds.set_all((0, 255, 0))
@@ -258,7 +258,8 @@ class OnBoard():
             self.save_temp_key(new_key=self.rand_e2e_key,
                                section_name="prev_e2e_key",
                                temp_key_name="temp_e2e_key")
-        self.client = mqtt.Client(self.config.get('mqtt', 'username'), clean_session=True)
+        self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1,
+                                  self.config.get('mqtt', 'username'), clean_session=True)
         # TODO: to log this effectively for error logs,
         # instead of actual key save a hash of it to the log file.
         # This way WEPN staff can

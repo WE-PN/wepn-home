@@ -89,7 +89,8 @@ class MQTTTest():
 
     def run_test(self):
         mqtt.Client.connected_flag = False  # create flag in class
-        self.client = mqtt.Client(self.USER, clean_session=True)
+        self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1,
+                                  self.USER, clean_session=True)
         self.client.on_connect = self.on_connect
         self.client.on_message = self.on_message
         self.client.on_disconnect = self.on_disconnect

@@ -8,7 +8,12 @@ import sys
 import tempfile
 
 from flask import request
-from flask_api import status as http_status
+
+
+class http_status:
+    HTTP_401_UNAUTHORIZED = 401
+    HTTP_503_SERVICE_UNAVAILABLE = 503
+
 
 sys.path.insert(1, '..')  # nopep8 noqa
 from device import Device  # nopep8 noqa

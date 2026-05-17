@@ -302,13 +302,13 @@ class PProxy():
     # The callback for when the client receives a CONNACK response from the server.
     # if save_state takes too long, MQTT will disconnect so keep this function fast
     # and not blocking too long
-    def on_connect(self, client, userdata, flags, result_code):
-        self.logger.info("Connected with result code " + str(result_code))
+    def on_connect(self, client, userdata, flags, reason_code, properties=None):
+        self.logger.info("Connected with result code " + str(reason_code))
         self.mqtt_connected = 1
-        self.mqtt_reason = result_code
+        self.mqtt_reason = reason_code
         self.status.reload()
         self.status.set('mqtt', 1)
-        self.status.set('mqtt-reason', result_code)
+        self.status.set('mqtt-reason', reason_code)
         self.status.save()
 
         # Subscribing in on_connect() means that if we lose the connection and
@@ -632,8 +632,8 @@ class PProxy():
         time.sleep(1)
         services.start()
         time.sleep(5)
-        client = mqtt.Client(self.config.get(
-            'mqtt', 'username'), clean_session=False)
+        client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1,
+                             self.config.get('mqtt', 'username'), clean_session=False)
         self.logger.debug('HW config: button=' + str(int(self.config.get('hw', 'buttons'))) + '  LCD=' +
                           self.config.get('hw', 'lcd'))
         if (int(self.config.get('hw', 'buttons')) == 1 and
