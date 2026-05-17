@@ -243,20 +243,35 @@ def test_get_messages_network_error_propagates(mock_get, messages_instance):
 
 
 def test_decrypt_message_tampered_ciphertext_raises(messages_instance):
-    # Valid nonce and key, but garbage ciphertext → GCM authentication fails
-    nonce = base64.urlsafe_b64encode(b'\x00' * 12).decode()
-    bad_msg = base64.urlsafe_b64encode(b'garbage_not_encrypted_data').decode()
+    # Encrypt a real message, then flip a byte in the ciphertext — GCM tag verification must reject it
+    original_text = "authentic message"
+    encrypted, nonce = messages_instance.encrypt_message(original_text)
+    tampered = bytearray(encrypted)
+    tampered[0] ^= 0xFF  # flip a bit in the ciphertext (before the tag)
+    enc_b64 = base64.urlsafe_b64encode(bytes(tampered)).decode('utf-8')
+    nonce_b64 = base64.urlsafe_b64encode(nonce).decode('utf-8')
     with pytest.raises(Exception):
-        messages_instance.decrypt_message(bad_msg, nonce)
+        messages_instance.decrypt_message(enc_b64, nonce_b64)
+
+
+def test_decrypt_message_tampered_tag_raises(messages_instance):
+    # Flip a byte in the tag (last 16 bytes) — GCM must reject it
+    original_text = "authentic message"
+    encrypted, nonce = messages_instance.encrypt_message(original_text)
+    tampered = bytearray(encrypted)
+    tampered[-1] ^= 0xFF  # flip a bit in the tag
+    enc_b64 = base64.urlsafe_b64encode(bytes(tampered)).decode('utf-8')
+    nonce_b64 = base64.urlsafe_b64encode(nonce).decode('utf-8')
+    with pytest.raises(Exception):
+        messages_instance.decrypt_message(enc_b64, nonce_b64)
 
 
 def test_encrypt_decrypt_cycle(messages_instance):
     original_text = "This is a test message for encryption"
     encrypted, nonce = messages_instance.encrypt_message(original_text)
-    
-    # Simulate transport encoding (base64)
+
     enc_b64 = base64.urlsafe_b64encode(encrypted).decode('utf-8')
     nonce_b64 = base64.urlsafe_b64encode(nonce).decode('utf-8')
-    
+
     decrypted = messages_instance.decrypt_message(enc_b64, nonce_b64)
     assert decrypted == original_text

@@ -1,5 +1,3 @@
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import padding
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 import base64
 import configparser
@@ -112,20 +110,20 @@ class Messages():
     def encrypt_message(self, private_msg):
         key = base64.urlsafe_b64decode(str(self.status.get('status', 'e2e_key')))
         nonce = os.urandom(12)
-        encryptor = Cipher(algorithms.AES(key), modes.GCM(nonce), default_backend()).encryptor()
-        padder = padding.PKCS7(algorithms.AES(key).block_size).padder()
-        padded_data = padder.update(base64.b64encode(str.encode(private_msg))) + padder.finalize()
-        encrypted_text = encryptor.update(padded_data) + encryptor.finalize()
-        return encrypted_text, nonce
+        encryptor = Cipher(algorithms.AES(key), modes.GCM(nonce)).encryptor()
+        ciphertext = encryptor.update(base64.b64encode(str.encode(private_msg))) + encryptor.finalize()
+        # Tag (16 bytes) is appended to ciphertext; decrypt_message splits it back off.
+        # NOTE: mobile app must append/strip tag symmetrically when this changes.
+        return ciphertext + encryptor.tag, nonce
 
     def decrypt_message(self, encoded_encrypted_msg, nonce):
         key = base64.urlsafe_b64decode(str(self.status.get('status', 'e2e_key')))
-        encoded_encrypted_msg = base64.urlsafe_b64decode(encoded_encrypted_msg)
+        data = base64.urlsafe_b64decode(encoded_encrypted_msg)
         nonce = base64.urlsafe_b64decode(nonce)
-        padder = padding.PKCS7(algorithms.AES(key).block_size).padder()
-        decryptor = Cipher(algorithms.AES(key), modes.GCM(nonce), default_backend()).decryptor()
-        decrypted_data = decryptor.update(encoded_encrypted_msg)
-        unpadded = padder.update(decrypted_data) + padder.finalize()
-        clear_text = base64.b64decode(unpadded).decode("utf-8")
+        ciphertext, tag = data[:-16], data[-16:]
+        decryptor = Cipher(algorithms.AES(key), modes.GCM(nonce, tag)).decryptor()
+        # finalize() verifies the tag and raises InvalidTag if the message was tampered with
+        clear_b64 = decryptor.update(ciphertext) + decryptor.finalize()
+        clear_text = base64.b64decode(clear_b64).decode("utf-8")
         self.logger.info(clear_text)
         return clear_text
