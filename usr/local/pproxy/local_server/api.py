@@ -63,8 +63,7 @@ def valid_token(incoming):
 
 
 app = flask.Flask(__name__)
-# app.config["DEBUG"] = False
-app.config["DEBUG"] = True
+app.config["DEBUG"] = False
 
 
 @app.route('/', methods=['GET'])
@@ -198,7 +197,8 @@ def check_port_available_externally():
     # A cron tries to access this path
     # if it is accessible from external IP then shut down
     # This API is not supposed to be externally accessible
-    if not valid_token(request.args.get('local_token')):
+    token = request.args.get('local_token') or request.form.get('local_token')
+    if not valid_token(token):
         return "Not accessible", http_status.HTTP_401_UNAUTHORIZED
     global exposed
     exposed = True
