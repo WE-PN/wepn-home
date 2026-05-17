@@ -56,6 +56,8 @@ if __name__ == "__main__":
         with open(input_file, "r") as imports:
             for req in imports:
                 line = req.strip()
+                if not line or line.startswith("#"):
+                    continue
                 try:
                     pkg_data = line.split("==")
                     if len(pkg_data) > 1:
