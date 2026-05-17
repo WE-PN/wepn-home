@@ -6,7 +6,7 @@ import logging.config
 import os
 import requests
 
-from constants import LOG_CONFIG
+from constants import LOG_CONFIG, DEBUG_LOG_E2EE
 
 CONFIG_FILE = '/etc/pproxy/config.ini'
 STATUS_FILE = '/var/local/pproxy/status.ini'
@@ -125,5 +125,6 @@ class Messages():
         # finalize() verifies the tag and raises InvalidTag if the message was tampered with
         clear_b64 = decryptor.update(ciphertext) + decryptor.finalize()
         clear_text = base64.b64decode(clear_b64).decode("utf-8")
-        self.logger.info(clear_text)
+        if DEBUG_LOG_E2EE:
+            self.logger.info("Decrypted message: " + clear_text)
         return clear_text
