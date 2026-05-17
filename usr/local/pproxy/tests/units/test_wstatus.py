@@ -53,14 +53,15 @@ class TestWStatus(unittest.TestCase):
             patch('wstatus.os.fdopen', return_value=MagicMock()),
             patch('wstatus.os.replace'),
             patch('wstatus.os.unlink'),
+            patch('wstatus.os.chmod'),
         )
 
     def test_save_success(self):
         ws = WStatus(self.mock_logger)
         self.mock_cts.return_value = "changed_status"
 
-        p_mkstemp, p_fdopen, p_replace, p_unlink = self._save_patches()
-        with p_mkstemp, p_fdopen as mock_fdopen, p_replace as mock_replace, p_unlink:
+        p_mkstemp, p_fdopen, p_replace, p_unlink, p_chmod = self._save_patches()
+        with p_mkstemp, p_fdopen as mock_fdopen, p_replace as mock_replace, p_unlink, p_chmod:
             ws.save()
 
         mock_fdopen.assert_called_once()
@@ -72,9 +73,9 @@ class TestWStatus(unittest.TestCase):
         ws = WStatus(self.mock_logger)
         self.mock_cts.return_value = "changed_status"
 
-        p_mkstemp, p_fdopen, p_replace, p_unlink = self._save_patches()
+        p_mkstemp, p_fdopen, p_replace, p_unlink, p_chmod = self._save_patches()
         m_open = mock_open()
-        with p_mkstemp, p_fdopen, p_replace, p_unlink, patch('builtins.open', m_open):
+        with p_mkstemp, p_fdopen, p_replace, p_unlink, p_chmod, patch('builtins.open', m_open):
             ws.save()
 
         m_open.assert_not_called()
@@ -83,11 +84,12 @@ class TestWStatus(unittest.TestCase):
         ws = WStatus(self.mock_logger)
         self.mock_cts.return_value = "changed_status"
 
-        p_mkstemp, _, p_replace, p_unlink = self._save_patches()
+        p_mkstemp, _, p_replace, p_unlink, p_chmod = self._save_patches()
         with p_mkstemp, \
              patch('wstatus.os.fdopen', side_effect=IOError("disk full")), \
              p_replace as mock_replace, \
-             p_unlink as mock_unlink:
+             p_unlink as mock_unlink, \
+             p_chmod:
             ws.save()
 
         mock_unlink.assert_called_once_with('/tmp/status.tmp')
@@ -109,8 +111,8 @@ class TestWStatus(unittest.TestCase):
     def test_save_no_change(self):
         ws = WStatus(self.mock_logger)
         # No modification of CTS return value — hash unchanged, no write
-        p_mkstemp, p_fdopen, p_replace, p_unlink = self._save_patches()
-        with p_mkstemp as mock_mkstemp, p_fdopen, p_replace, p_unlink:
+        p_mkstemp, p_fdopen, p_replace, p_unlink, p_chmod = self._save_patches()
+        with p_mkstemp as mock_mkstemp, p_fdopen, p_replace, p_unlink, p_chmod:
             ws.save()
 
         mock_mkstemp.assert_not_called()
@@ -120,8 +122,8 @@ class TestWStatus(unittest.TestCase):
         ws = WStatus(self.mock_logger)
         self.mock_cts.return_value = "changed_1"
 
-        p_mkstemp, p_fdopen, p_replace, p_unlink = self._save_patches()
-        with p_mkstemp as mock_mkstemp, p_fdopen, p_replace, p_unlink:
+        p_mkstemp, p_fdopen, p_replace, p_unlink, p_chmod = self._save_patches()
+        with p_mkstemp as mock_mkstemp, p_fdopen, p_replace, p_unlink, p_chmod:
             ws.save()
             ws.save()  # no change — should not write again
 
@@ -129,7 +131,7 @@ class TestWStatus(unittest.TestCase):
         self.assertEqual(self.mock_config.write.call_count, 1)
 
         self.mock_cts.return_value = "changed_2"
-        with p_mkstemp, p_fdopen, p_replace, p_unlink:
+        with p_mkstemp, p_fdopen, p_replace, p_unlink, p_chmod:
             ws.save()
 
         self.assertEqual(self.mock_config.write.call_count, 2)
