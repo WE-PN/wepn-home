@@ -118,7 +118,7 @@ def claim_info():
     status = WStatus(logger)
     serial_number = config.get('django', 'serial_number')
     is_claimed = status.get_field('status', 'claimed')
-    if int(is_claimed) == 1:
+    if is_claimed and int(is_claimed) == 1:
         dev_key = "CLAIMED"
         return "{\"claimed\":\"" + is_claimed + "\", \
             \"serial_number\": \"" + str(serial_number) + \
@@ -219,7 +219,7 @@ def get_error_log():
     # if claimed, then check credentials
     status = WStatus(logger)
     is_claimed = status.get_field('status', 'claimed')
-    if int(is_claimed) == 1:
+    if is_claimed and int(is_claimed) == 1:
         if not valid_token(request.args.get('local_token')):
             return "Not accessible", http_status.HTTP_401_UNAUTHORIZED
     device = Device(logger)
