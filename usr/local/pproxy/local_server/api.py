@@ -53,11 +53,13 @@ def return_link(cname):
 
 
 def valid_token(incoming):
+    if not incoming or not str(incoming).isalnum():
+        return False
     status = WStatus(logger)
     valid_token = status.get_field('status', 'local_token')
     prev_token = status.get_field('status', 'prev_token')
-    return (sanitize_str(incoming) == str(valid_token) or
-            sanitize_str(incoming) == str(prev_token))
+    return (str(incoming) == str(valid_token) or
+            str(incoming) == str(prev_token))
 
 
 app = flask.Flask(__name__)
@@ -116,15 +118,18 @@ def claim_info():
     status = WStatus(logger)
     serial_number = config.get('django', 'serial_number')
     is_claimed = status.get_field('status', 'claimed')
-    e2e_key = status.get_field('status', 'e2e_key')
     if int(is_claimed) == 1:
         dev_key = "CLAIMED"
+        return "{\"claimed\":\"" + is_claimed + "\", \
+            \"serial_number\": \"" + str(serial_number) + \
+            "\", \"device_key\":\"" + dev_key + "\"}"
     else:
         dev_key = status.get_field('status', 'temporary_key')
-    return "{\"claimed\":\"" + is_claimed + "\", \
-        \"serial_number\": \"" + str(serial_number) + \
-        "\", \"device_key\":\"" + dev_key + "\", \"e2e_key\":\"" + \
-        e2e_key + "\"}"
+        e2e_key = status.get_field('status', 'e2e_key')
+        return "{\"claimed\":\"" + is_claimed + "\", \
+            \"serial_number\": \"" + str(serial_number) + \
+            "\", \"device_key\":\"" + dev_key + "\", \"e2e_key\":\"" + \
+            e2e_key + "\"}"
 
 
 @app.route('/api/v1/e2e_key', methods=['GET'])
