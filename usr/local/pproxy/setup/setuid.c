@@ -101,8 +101,8 @@ int main(int argc, char * argv[])
 
 	int c,s,t;
 
-	char cmd[255];
-	char scmd[255];
+	char cmd[255] = {0};
+	char scmd[255] = {0};
 #ifdef DEBUG
 	for (int i = 0; i < argc; i++) {
 		printf("param[%d] = %s\n", i, argv[i]);
@@ -140,7 +140,7 @@ int main(int argc, char * argv[])
 #endif
 
 
-	if (s > SPECIAL_CMD_CNT || t > 3) {
+	if (s >= SPECIAL_CMD_CNT || t > 3) {
 		printf("S=%d T=%d\n", s, t);
 		printf("# commands = %d\n", SPECIAL_CMD_CNT);
 		printf("Out of range index\n");
@@ -260,6 +260,10 @@ int main(int argc, char * argv[])
 #ifdef DEBUG
 	printf("\ncmd= %s\n", cmd);
 #endif
+	if (cmd[0] == '\0') {
+		printf("No command was built for t=%d s=%d\n", t, s);
+		return(1);
+	}
 	setuid(0);
 	p = popen(cmd,"r");
 	if ( p == NULL )
