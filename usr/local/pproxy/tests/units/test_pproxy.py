@@ -349,6 +349,28 @@ class TestPProxy(unittest.TestCase):
         self.pp.config.set.assert_any_call('dyndns', 'hostname', 'my.host.test')
         self.pp.config.write.assert_called_once()
 
+    def test_on_message_handler_set_ddns_stores_raw_value(self):
+        """Regression guard: special-char values must not be shell-quoted."""
+        data = {'action': 'set_ddns', 'password': "my'pass"}
+        with patch('pproxy.Services'), patch('builtins.open', mock_open()):
+            self.pp.on_message_handler(data, MagicMock())
+        self.pp.config.set.assert_any_call('dyndns', 'password', "my'pass")
+
+    def test_on_message_handler_set_creds_stores_raw_value(self):
+        """Regression guard: credentials must not be shell-quoted before storing."""
+        data = {
+            'action': 'set_creds',
+            'host': 'smtp.example.com',
+            'port': '587',
+            'username': 'user@example.com',
+            'email': 'from@example.com',
+            'password': "p@ss'word",
+        }
+        with patch('pproxy.Services'), patch('builtins.open', mock_open()):
+            self.pp.on_message_handler(data, MagicMock())
+        self.pp.config.set.assert_any_call('email', 'password', "p@ss'word")
+        self.pp.config.set.assert_any_call('email', 'host', 'smtp.example.com')
+
     # --- send_mail enabled ---
 
     def _enable_email(self):

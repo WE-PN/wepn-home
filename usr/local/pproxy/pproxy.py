@@ -541,14 +541,11 @@ class PProxy():
             self.device.install_package(self.sanitize_str(data['package']))
         elif (data['action'] == 'set_creds'):
             if (data['host']):
-                self.config.set('email', 'host',
-                                self.sanitize_str(data['host']))
-            self.config.set('email', 'port', self.sanitize_str(data['port']))
-            self.config.set('email', 'username',
-                            self.sanitize_str(data['username']))
-            self.config.set('email', 'email', self.sanitize_str(data['email']))
-            self.config.set('email', 'password',
-                            self.sanitize_str(data['password']))
+                self.config.set('email', 'host', str(data['host']))
+            self.config.set('email', 'port', str(data['port']))
+            self.config.set('email', 'username', str(data['username']))
+            self.config.set('email', 'email', str(data['email']))
+            self.config.set('email', 'password', str(data['password']))
             with open(CONFIG_FILE, 'w') as configfile:
                 self.config.write(configfile)
 
@@ -557,8 +554,7 @@ class PProxy():
                               'password', 'method', 'zone_id', 'record_id', 'token']
             for item in allowed_params:
                 if (item in data):
-                    self.config.set('dyndns', item,
-                                    self.sanitize_str(data[item]))
+                    self.config.set('dyndns', item, str(data[item]))
             with open(CONFIG_FILE, 'w') as configfile:
                 self.config.write(configfile)
         elif (data['action'] == 'config_update'):
