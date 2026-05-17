@@ -99,10 +99,18 @@ int main(int argc, char * argv[])
 	scommands[28]= "/usr/bin/apt-get -y -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confnew\" -f install redsocks";
 	scommands[29]= "/usr/bin/wg show wg0 transfer";
 
+#define SAFE_SNPRINTF(buf, ...) do { \
+	int _written = snprintf(buf, sizeof(buf), __VA_ARGS__); \
+	if (_written < 0 || _written >= (int)sizeof(buf)) { \
+		printf("Error: command buffer overflow or formatting error!\n"); \
+		return(-1); \
+	} \
+} while(0)
+
 	int c,s,t;
 
-	char cmd[255] = {0};
-	char scmd[255] = {0};
+	char cmd[2048] = {0};
+	char scmd[1024] = {0};
 #ifdef DEBUG
 	for (int i = 0; i < argc; i++) {
 		printf("param[%d] = %s\n", i, argv[i]);
@@ -149,26 +157,30 @@ int main(int argc, char * argv[])
 
 	if (t == 0) {
 		// command is to control services
+		if (s >= SRV_CNT) {
+			printf("Out of range services index\n");
+			return(-1);
+		}
 		// get the command index:
 		c = strtol(argv[3], &ptr, 10);
-		if (c > CMD_CNT) {
+		if (c >= CMD_CNT) {
 			printf("Out of range commands index\n");
 			return(-1);
 		}
 		if (s == 2) {
 			if (argc != 5) {
 				printf("Missing params: assuming wg0\n");
-				sprintf(scmd, "wg-quick@wg0");
+				SAFE_SNPRINTF(scmd, "wg-quick@wg0");
 			}
 			else {
 				// update wg%d to match incoming interface
 				// wg index:
 				sanitize(argv[4]);
-				sprintf(scmd, services[2], argv[4]);
+				SAFE_SNPRINTF(scmd, services[2], argv[4]);
 			}
-			sprintf(cmd, "systemctl %s %s", commands[c], scmd);
+			SAFE_SNPRINTF(cmd, "systemctl %s %s", commands[c], scmd);
 		} else {
-			sprintf(cmd, "systemctl %s %s", commands[c], services[s]);
+			SAFE_SNPRINTF(cmd, "systemctl %s %s", commands[c], services[s]);
 		}
 	}
 
@@ -186,7 +198,7 @@ int main(int argc, char * argv[])
 			sanitize(argv[3]);
 			// peer public key
 			sanitize_b64(argv[4]);
-			sprintf(cmd, scommands[s], argv[3], argv[4]);
+			SAFE_SNPRINTF(cmd, scommands[s], argv[3], argv[4]);
 		}
 		else if (s == 6) {
 			// spcial commands that takes in arguments
@@ -205,7 +217,7 @@ int main(int argc, char * argv[])
 			// allowed ip
 			sanitize(argv[6]);
 
-			sprintf(cmd, scommands[s], argv[3], argv[4], argv[5], argv[6], argv[7]);
+			SAFE_SNPRINTF(cmd, scommands[s], argv[3], argv[4], argv[5], argv[6]);
 		}
 		else if (s == 23) {
 			// spcial commands that takes in arguments
@@ -223,7 +235,7 @@ int main(int argc, char * argv[])
 			// rate
 			sanitize(argv[6]);
 
-			sprintf(cmd, scommands[s], argv[3], argv[4], argv[5], argv[6], argv[7]);
+			SAFE_SNPRINTF(cmd, scommands[s], argv[3], argv[4], argv[5], argv[6]);
 		}
 		else if (s == 24 || s == 25) {
 			// 24 just gets the usage from iptables mangle rule
@@ -238,23 +250,23 @@ int main(int argc, char * argv[])
 			// device
 			sanitize(argv[4]);
 
-			sprintf(cmd, scommands[s], argv[3], argv[4]);
+			SAFE_SNPRINTF(cmd, scommands[s], argv[3], argv[4]);
 		}
 		else if (s == 7 || s == 16) {
 			// spcial commands that takes in arguments
 			if (argc != 4) {
 				printf("Missing params: assuming wg0\n");
-				sprintf(cmd, scommands[s], "0");
+				SAFE_SNPRINTF(cmd, scommands[s], "0");
 			} else {
 				// 7: wg-quick save wg%s
 				// or
 				// 16: wg-quick down wg%s
 				// wg index:
 				sanitize(argv[3]);
-				sprintf(cmd, scommands[s], argv[3]);
+				SAFE_SNPRINTF(cmd, scommands[s], argv[3]);
 			}
 		} else {
-			sprintf(cmd, "%s", scommands[s]);
+			SAFE_SNPRINTF(cmd, "%s", scommands[s]);
 		}
 	}
 #ifdef DEBUG
