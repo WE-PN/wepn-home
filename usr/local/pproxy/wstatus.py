@@ -1,5 +1,7 @@
 import io
 import json
+import os
+import tempfile
 
 try:
     from configparser import configparser
@@ -31,14 +33,19 @@ class WStatus:
         new_hash = hash(self.config_to_string(self.status))
         if new_hash == self.orig_hash:
             return
-        # TODO: add lock checking
         if self.source_file is not None and self.status is not None:
             self.logger.info(f"writing status file {self.source_file}")
             try:
-                statusfile = open(self.source_file, 'w')
-                self.status.write(statusfile)
-                statusfile.close()
-                self.orig_hash = new_hash
+                dir_ = os.path.dirname(self.source_file) or '.'
+                fd, tmp_path = tempfile.mkstemp(dir=dir_)
+                try:
+                    with os.fdopen(fd, 'w') as f:
+                        self.status.write(f)
+                    os.replace(tmp_path, self.source_file)
+                    self.orig_hash = new_hash
+                except Exception:
+                    os.unlink(tmp_path)
+                    raise
             except Exception as err:
                 self.logger.debug(
                     "Something happened when writing status file:" + self.source_file

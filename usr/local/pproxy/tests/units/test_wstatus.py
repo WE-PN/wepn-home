@@ -46,63 +46,92 @@ class TestWStatus(unittest.TestCase):
         self.assertEqual(ws.source_file, custom_file)
         self.mock_config.read.assert_called_with(custom_file)
 
+    def _save_patches(self, fake_fd=10, tmp_path='/tmp/status.tmp'):
+        """Context managers for the atomic-write path."""
+        return (
+            patch('wstatus.tempfile.mkstemp', return_value=(fake_fd, tmp_path)),
+            patch('wstatus.os.fdopen', return_value=MagicMock()),
+            patch('wstatus.os.replace'),
+            patch('wstatus.os.unlink'),
+        )
+
     def test_save_success(self):
         ws = WStatus(self.mock_logger)
-        # Update CTS to return "changed" value
         self.mock_cts.return_value = "changed_status"
 
-        m_open = mock_open()
-        with patch('builtins.open', m_open):
+        p_mkstemp, p_fdopen, p_replace, p_unlink = self._save_patches()
+        with p_mkstemp, p_fdopen as mock_fdopen, p_replace as mock_replace, p_unlink:
             ws.save()
 
-        m_open.assert_called_with(STATUS_FILE, 'w')
+        mock_fdopen.assert_called_once()
+        mock_replace.assert_called_once_with('/tmp/status.tmp', STATUS_FILE)
         self.mock_config.write.assert_called()
 
-    def test_save_exception(self):
+    def test_save_atomic_uses_replace_not_direct_write(self):
+        """Verify os.replace is used and builtins.open is never called directly."""
         ws = WStatus(self.mock_logger)
-        # Update CTS to return "changed" value
         self.mock_cts.return_value = "changed_status"
 
-        with patch('builtins.open', side_effect=IOError("Permission denied")):
+        p_mkstemp, p_fdopen, p_replace, p_unlink = self._save_patches()
+        m_open = mock_open()
+        with p_mkstemp, p_fdopen, p_replace, p_unlink, patch('builtins.open', m_open):
             ws.save()
 
-        # Should log debug message
+        m_open.assert_not_called()
+
+    def test_save_exception_cleans_up_temp_file(self):
+        ws = WStatus(self.mock_logger)
+        self.mock_cts.return_value = "changed_status"
+
+        p_mkstemp, _, p_replace, p_unlink = self._save_patches()
+        with p_mkstemp, \
+             patch('wstatus.os.fdopen', side_effect=IOError("disk full")), \
+             p_replace as mock_replace, \
+             p_unlink as mock_unlink:
+            ws.save()
+
+        mock_unlink.assert_called_once_with('/tmp/status.tmp')
+        mock_replace.assert_not_called()
+        args, _ = self.mock_logger.debug.call_args
+        self.assertIn("Something happened when writing status file", args[0])
+
+    def test_save_exception_mkstemp_fails(self):
+        ws = WStatus(self.mock_logger)
+        self.mock_cts.return_value = "changed_status"
+
+        with patch('wstatus.tempfile.mkstemp', side_effect=IOError("Permission denied")):
+            ws.save()
+
         self.assertTrue(self.mock_logger.debug.called)
         args, _ = self.mock_logger.debug.call_args
         self.assertIn("Something happened when writing status file", args[0])
 
     def test_save_no_change(self):
         ws = WStatus(self.mock_logger)
-        # No modification of CTS return value
-        m_open = mock_open()
-        with patch('builtins.open', m_open):
+        # No modification of CTS return value — hash unchanged, no write
+        p_mkstemp, p_fdopen, p_replace, p_unlink = self._save_patches()
+        with p_mkstemp as mock_mkstemp, p_fdopen, p_replace, p_unlink:
             ws.save()
 
-        m_open.assert_not_called()
+        mock_mkstemp.assert_not_called()
         self.mock_config.write.assert_not_called()
 
     def test_save_multiple_times(self):
         ws = WStatus(self.mock_logger)
-        # First change
         self.mock_cts.return_value = "changed_1"
 
-        m_open = mock_open()
-        with patch('builtins.open', m_open):
+        p_mkstemp, p_fdopen, p_replace, p_unlink = self._save_patches()
+        with p_mkstemp as mock_mkstemp, p_fdopen, p_replace, p_unlink:
             ws.save()
-            # Second call without further changes
-            ws.save()
+            ws.save()  # no change — should not write again
 
-        # Should only have been opened once
-        self.assertEqual(m_open.call_count, 1)
+        self.assertEqual(mock_mkstemp.call_count, 1)
         self.assertEqual(self.mock_config.write.call_count, 1)
 
-        # Third call with new change
         self.mock_cts.return_value = "changed_2"
-        with patch('builtins.open', m_open):
+        with p_mkstemp, p_fdopen, p_replace, p_unlink:
             ws.save()
 
-        # Total calls should now be 2
-        self.assertEqual(m_open.call_count, 2)
         self.assertEqual(self.mock_config.write.call_count, 2)
 
     def test_reload(self):
