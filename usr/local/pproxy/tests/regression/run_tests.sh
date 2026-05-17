@@ -1,26 +1,41 @@
 status_file="/var/local/pproxy/status.ini"
 pproxy_config="/etc/pproxy/config.ini"
-source regenv/bin/activate
-wepn-run 1 1
-sleep 5
-if grep -q CLAIMED "$status_file";
-then
-	echo "Device not unclaimed properly, doing so now"
-	pytest wepn-regression.py  -vv -k 'test_login or test_unclaim'
-	wepn-run 1 1
-fi
-while grep -q CLAIMED $status_file; do
-	echo "still claimed, waiting ... ";
-	sleep 5 ;
-done
-wepn-run 1 1
 
-# Wait for pproxy to cycle through all cached previous keys (onboard-timeout=10s
-# × 5 keys ≈ 50s) and settle on a freshly generated random key. 180s leaves ample
-# margin. This eliminates the race where test_claim registers an old key while
-# pproxy has already moved on to a different one.
-echo "Waiting 180s for pproxy to settle on a fresh key..."
-sleep 180
+skip_wait=0
+skip_restart=0
+for arg in "$@"; do
+    case "$arg" in
+        --skip-wait)    skip_wait=1 ;;
+        --skip-restart) skip_restart=1 ;;
+    esac
+done
+
+source regenv/bin/activate
+
+if [ "$skip_restart" -eq 0 ]; then
+    wepn-run 1 1
+    sleep 5
+    if grep -q CLAIMED "$status_file";
+    then
+        echo "Device not unclaimed properly, doing so now"
+        pytest wepn-regression.py  -vv -k 'test_login or test_unclaim'
+        wepn-run 1 1
+    fi
+    while grep -q CLAIMED $status_file; do
+        echo "still claimed, waiting ... ";
+        sleep 5 ;
+    done
+    wepn-run 1 1
+fi
+
+if [ "$skip_wait" -eq 0 ]; then
+    # Wait for pproxy to cycle through all cached previous keys (onboard-timeout=10s
+    # × 5 keys ≈ 50s) and settle on a freshly generated random key. 180s leaves ample
+    # margin. This eliminates the race where test_claim registers an old key while
+    # pproxy has already moved on to a different one.
+    echo "Waiting 180s for pproxy to settle on a fresh key..."
+    sleep 180
+fi
 
 # Confirm temporary_key is ready (should be immediate after the settle period).
 for i in $(seq 1 12); do
