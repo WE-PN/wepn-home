@@ -1,0 +1,32 @@
+image: python:3.11-slim
+
+definitions:
+  caches:
+    pproxy-pip:
+      key:
+        files:
+          - usr/local/pproxy/tests/units/requirements.txt
+      path: ~/.cache/pip
+
+  steps:
+    - step: &unit-tests
+        name: Unit Tests
+        caches:
+          - pproxy-pip
+        script:
+          - pip install --quiet -r usr/local/pproxy/tests/units/requirements.txt
+          - python usr/local/pproxy/tests/run_tests_with_coverage.py
+            --path usr/local/pproxy
+            --junit-xml test-reports/results.xml
+        artifacts:
+          reports:
+            junit: usr/local/pproxy/test-reports/results.xml
+          paths:
+            - usr/local/pproxy/coverage.xml
+
+pipelines:
+  default:
+    - step: *unit-tests
+  pull-requests:
+    '**':
+      - step: *unit-tests

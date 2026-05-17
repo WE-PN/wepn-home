@@ -21,7 +21,7 @@ def get_module_name(test_filename):
     return None
 
 
-def main(prefix_path, pytest_binary):
+def main(prefix_path, pytest_binary, junit_xml=None):
     os.chdir(prefix_path)
     if not os.path.exists("service.py"):
         print("Error: Please run this script from the project root directory.")
@@ -44,11 +44,12 @@ def main(prefix_path, pytest_binary):
     print(f"Found {len(test_files)} test files.")
     print(f"Covering modules: {', '.join(sorted_modules)}\n")
 
-    # Construct pytest command
-    # Running all together for proper coverage aggregation
-    cmd = [pytest_binary, "-v", "--cov-report", "term-missing"]
+    cmd = [pytest_binary, "-v", "--cov-report", "term-missing", "--cov-report", "xml"]
     for m in sorted_modules:
         cmd.append(f"--cov={m}")
+    if junit_xml:
+        os.makedirs(os.path.dirname(junit_xml) or ".", exist_ok=True)
+        cmd.extend(["--junit-xml", junit_xml])
     cmd.append(test_dir)
 
     print(f"Executing: {' '.join(cmd)}\n")
@@ -73,6 +74,9 @@ if __name__ == "__main__":
     parser.add_argument("--path", type=str, default="./", help="The path to source files.")
     parser.add_argument("--pytest", type=str, default=default_pytest(), help="The path to the pytest.")
 
+    parser.add_argument("--junit-xml", type=str, default=None,
+                        help="Write a JUnit XML test report to this path (for CI integration).")
+
     args = parser.parse_args()
 
-    main(prefix_path=args.path, pytest_binary=args.pytest)
+    main(prefix_path=args.path, pytest_binary=args.pytest, junit_xml=args.junit_xml)
