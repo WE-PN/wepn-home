@@ -605,7 +605,7 @@ class Device():
 
     def get_repo_package_version(self):
         self.repo_pkg_version = None
-        if self.get_ota_channel == "beta":
+        if self.get_ota_channel() == "beta":
             dist = "testing"
         else:
             try:

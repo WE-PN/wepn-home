@@ -500,6 +500,27 @@ class TestUpdate:
         mock_get.side_effect = device.requests.exceptions.ConnectionError("conn error")
         assert device_instance.get_repo_package_version() is None
 
+    @patch('device.requests.get')
+    def test_get_repo_package_version_beta_channel(self, mock_get, device_instance):
+        mock_get.return_value.text = "Package: pproxy\nVersion: 2.0.0\n"
+        with patch('device.platform.architecture', return_value=('64bit', '')), \
+                patch.object(device_instance, 'get_ota_channel', return_value='beta'):
+            result = device_instance.get_repo_package_version()
+        url_called = mock_get.call_args[0][0]
+        assert 'testing' in url_called
+        assert result == "2.0.0"
+
+    @patch('device.requests.get')
+    def test_get_repo_package_version_stable_channel(self, mock_get, device_instance):
+        mock_get.return_value.text = "Package: pproxy\nVersion: 1.9.0\n"
+        with patch('device.platform.architecture', return_value=('64bit', '')), \
+                patch('device.distro.codename', return_value='bookworm'), \
+                patch.object(device_instance, 'get_ota_channel', return_value='stable'):
+            result = device_instance.get_repo_package_version()
+        url_called = mock_get.call_args[0][0]
+        assert 'bookworm' in url_called
+        assert result == "1.9.0"
+
     def test_get_installed_package_version(self, device_instance):
         with patch.object(device_instance, 'execute_cmd_output') as mock_exec:
             # Code uses str(result[0]).split("\\n").
