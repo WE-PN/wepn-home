@@ -42,7 +42,7 @@ AutomapHostsSuffixes .exit,.onion
 
 ControlPort 9051
 CookieAuthentication 1
-CookieAuthFileGroupReadable 1
+CookieAuthFileGroupReadable 0
 
 Nickname WETor
 EOF
@@ -77,5 +77,5 @@ systemctl restart tor.service
 /usr/sbin/usermod -a -G tor-log pi
 /usr/sbin/usermod -a -G tor-log debian-tor
 
-chown debian-tor:tor-log /run/tor/control.authcookie
-chmod 660 /run/tor/control.authcookie
+chown debian-tor:debian-tor /run/tor/control.authcookie
+chmod 600 /run/tor/control.authcookie
