@@ -16,8 +16,8 @@ class OpenVPN(Service):
     def add_user(self, certname, ip_address, password, port, lang):
         if not self.is_enabled():
             return False
-        cmd = '/bin/bash ./add_user_openvpn.sh ' + certname + ' ' + \
-            ip_address + ' ' + str(self.config.get('openvpn', 'port'))
+        cmd = '/bin/bash ./add_user_openvpn.sh ' + shlex.quote(certname) + ' ' + \
+            shlex.quote(ip_address) + ' ' + shlex.quote(str(self.config.get('openvpn', 'port')))
         self.logger.debug(cmd)
         self.execute_cmd(cmd)
         return False
@@ -25,7 +25,7 @@ class OpenVPN(Service):
     def delete_user(self, certname):
         if not self.is_enabled():
             return
-        cmd = '/bin/bash ./delete_user_openvpn.sh ' + certname
+        cmd = '/bin/bash ./delete_user_openvpn.sh ' + shlex.quote(certname)
         self.logger.debug(cmd)
         self.execute_cmd(cmd)
         return
