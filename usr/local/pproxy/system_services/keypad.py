@@ -926,7 +926,7 @@ def main():
             keypad.menu_active_countdown = MENU_TIMEOUT
         if keypad.screen_timed_out is False:
             keypad.countdown_to_turn_off_screen -= 1
-        if keypad.countdown_to_turn_off_screen == 0:
+        if keypad.countdown_to_turn_off_screen == 0 and not keypad.screen_timed_out:
             if not FORCE_SCREEN_ON:
                 keypad.screen_timed_out = True
                 keypad.clear_screen()

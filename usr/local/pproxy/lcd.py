@@ -148,7 +148,8 @@ class LCD:
         top = padding
         # Move left to right keeping track of the current x position for drawing shapes.
         x_pad = padding
-        self.set_backlight(turn_on=True)
+        if strs:
+            self.set_backlight(turn_on=True)
 
         if self.version == 2 or self.version == 3:
             width = self.width
