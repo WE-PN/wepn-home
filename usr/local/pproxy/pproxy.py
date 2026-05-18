@@ -13,8 +13,10 @@ import paho.mqtt.client as mqtt
 import random
 import re
 import shlex
+import signal
 import smtplib
 import ssl
+import sys
 import time
 import zlib
 
@@ -87,6 +89,7 @@ class PProxy():
             self.factory = None
         self.leds = LEDClient()
         atexit.register(self.cleanup)
+        signal.signal(signal.SIGTERM, lambda signum, frame: sys.exit(0))
         self.status = WStatus(self.loggers['wstatus'])
         self.device = Device(self.loggers['device'])
         self.mqtt_lock = Lock()
@@ -97,6 +100,12 @@ class PProxy():
     def cleanup(self):
         self.logger.debug("PProxy shutting down.")
         self.leds.blank()
+        if self.lcd is not None:
+            try:
+                self.lcd.display([(1, "", 0, "black")], 20)
+                self.lcd.set_backlight(turn_on=False)
+            except Exception:
+                self.logger.warning("LCD cleanup failed")
         if gpio_up:
             GPIO.cleanup()
 
