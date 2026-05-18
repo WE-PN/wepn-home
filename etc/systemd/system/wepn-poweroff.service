@@ -1,14 +1,13 @@
 [Unit]
-Description=WEPN clearnig state at shutdown
+Description=WEPN clearing state at shutdown
 DefaultDependencies=no
-After=final.target wepn-leds.service
+Before=wepn-leds.service wepn-main.service
 
 [Service]
 RemainAfterExit=yes
 Type=oneshot
 User=pproxy
-ExecStart=/var/local/pproxy/wepn-env/bin/python3 /usr/local/pproxy/system_services/blank_state.py
 ExecStop=/var/local/pproxy/wepn-env/bin/python3 /usr/local/pproxy/system_services/blank_state.py
 
 [Install]
-WantedBy=final.target
+WantedBy=multi-user.target

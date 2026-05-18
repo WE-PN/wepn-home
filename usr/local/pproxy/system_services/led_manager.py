@@ -376,13 +376,11 @@ if __name__ == '__main__':
                     t = Thread(target=lm.run_command, args=(incoming,))
                     t.start()
         except KeyboardInterrupt:
-            print('Interrupted')  # noqa: T201
+            lm.STOP = True
+            t.join(timeout=2.0)
+            lm.blank()
             server.close()
-            lm.__del__()
-            try:
-                sys.exit(0)
-            except SystemExit:
-                os._exit(0)
+            os._exit(0)
     lm.logger.info("Shutting down...")
     server.close()
     os.remove(LM_SOCKET_PATH)
