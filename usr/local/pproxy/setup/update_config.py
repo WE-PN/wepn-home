@@ -171,6 +171,9 @@ if not config.has_section('dyndns'):
     config.set('dyndns', 'url', "https://{}:{}@domains.google.com/nic/update?hostname={}&myip={}")
     # config.set('dyndns','url', "http://{}:{}@dynupdate.no-ip.com/nic/update?hostname={}&myip={}")
 
+if not config.has_option('dyndns', 'issue_certbot_ssl'):
+    config.set('dyndns', 'issue_certbot_ssl', '0')
+
 # Tor installation and config
 if not config.has_section('tor'):
     config.add_section('tor')

@@ -31,5 +31,7 @@
 10 1 * * * /bin/bash /usr/local/pproxy/periodic/check_wireguard.sh
 # update dynamic dns if present
 @daily /var/local/pproxy/wepn-env/bin/python3 /usr/local/pproxy/periodic/ddns.py --random-delay >/dev/null 2>&1
+# issue/renew Let's Encrypt cert when cloudflare dyndns and issue_certbot_ssl are enabled
+@daily /var/local/pproxy/wepn-env/bin/python3 /usr/local/pproxy/periodic/ssl_cert.py --random-delay >/dev/null 2>&1
 # weekly update
 @weekly /usr/local/sbin/wepn-run 1 3 >/dev/null 2>&1

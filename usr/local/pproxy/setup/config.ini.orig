@@ -56,10 +56,15 @@ db-path = /var/local/pproxy/usage.db
 
 [dyndns]
 enabled = 0
-username = 
-password = 
-hostname = 
+username =
+password =
+hostname =
 url = https://{}:{}@domains.google.com/nic/update?hostname={}&myip={}
+method = ddns
+token =
+zone_id =
+record_id =
+issue_certbot_ssl = 0
 
 [tor]
 enabled = 1
