@@ -1,19 +1,16 @@
-import os
-import sys
+import getopt
 import logging
+import random
 import subprocess  # nosec: static input, go.we-pn.com/waiver-1
+import sys
+import time
 import configparser
 
-up_dir = os.path.dirname(os.path.abspath(__file__)) + '/../'
-sys.path.append(up_dir)
-
-from device import random_cron_delay
-from constants import CONFIG_FILE
-
-logger = logging.getLogger("ssl-cert")
-
+CONFIG_FILE = "/etc/pproxy/config.ini"
 WEPN_RUN = "/usr/local/sbin/wepn-run"
 SSL_CERT_CMD_INDEX = "30"
+
+logger = logging.getLogger("ssl-cert")
 
 
 def _is_configured(config):
@@ -34,6 +31,15 @@ def _is_configured(config):
     return True
 
 
+def _random_cron_delay(args):
+    try:
+        opts, _ = getopt.getopt(args, "d", ["random-delay"])
+        if any(o in ("-d", "--random-delay") for o, _ in opts):
+            time.sleep(random.randint(20, 300))  # nosec: not used for cryptography
+    except getopt.GetoptError:
+        pass
+
+
 def main(config):
     if _is_configured(config):
         result = subprocess.run([WEPN_RUN, "1", SSL_CERT_CMD_INDEX])  # nosec: static input, go.we-pn.com/waiver-1
@@ -42,7 +48,8 @@ def main(config):
 
 
 if __name__ == "__main__":
-    random_cron_delay(sys.argv[1:])
     cfg = configparser.ConfigParser()
     cfg.read(CONFIG_FILE)
-    main(cfg)
+    if _is_configured(cfg):
+        _random_cron_delay(sys.argv[1:])
+        main(cfg)
