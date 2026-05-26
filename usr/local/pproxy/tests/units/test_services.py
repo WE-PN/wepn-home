@@ -23,7 +23,8 @@ def mock_all_services():
             patch('services.WiFi') as m9, \
             patch('services.Wireguard') as m10, \
             patch('services.WStatus') as m11, \
-            patch('services.sanitize') as m12:
+            patch('services.sanitize') as m12, \
+            patch('services.HAProxyService') as m13:
         yield {
             'measurement': m1,
             'networking': m2,
@@ -36,14 +37,15 @@ def mock_all_services():
             'wifi': m9,
             'wireguard': m10,
             'wstatus': m11,
-            'sanitize': m12
+            'sanitize': m12,
+            'haproxy': m13,
         }
 
 
 def test_init(mock_logger, mock_all_services):
     with patch('services.configparser.ConfigParser') as mock_cp:
         s = Services(mock_logger)
-        assert len(s.services) == 10
+        assert len(s.services) == 11
         mock_cp.return_value.read.assert_called_once()
         mock_all_services['wstatus'].assert_called_once()
 
@@ -136,7 +138,7 @@ def test_get_add_email_text(mock_logger, mock_all_services):
     txt, html, attachments, subject = s.get_add_email_text("user", "1.2.3.4", "en", "all")
     assert "txt" in txt
     assert "html" in html
-    assert len(attachments) == 10
+    assert len(attachments) == 11
     assert subject == 'Your New VPN Access Details'
 
 
@@ -288,7 +290,7 @@ def test_get_config_string(mock_logger, mock_all_services):
     with patch.object(s, 'get_saved_server_config_version', return_value=123):
         res = s.get_config_string()
         assert res["config_version"] == 123
-        assert len(res["services"]) == 10
+        assert len(res["services"]) == 11
 
     res = s.get_config_string(version=456)
     assert res["config_version"] == 456
