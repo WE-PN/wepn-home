@@ -174,6 +174,18 @@ if not config.has_section('dyndns'):
 if not config.has_option('dyndns', 'issue_certbot_ssl'):
     config.set('dyndns', 'issue_certbot_ssl', '0')
 
+if not config.has_section('haproxy'):
+    config.add_section('haproxy')
+    config.set('haproxy', 'enabled', '0')
+if not config.has_option('haproxy', 'port_ssl'):
+    config.set('haproxy', 'port_ssl', '443')
+if not config.has_option('haproxy', 'port_a'):
+    config.set('haproxy', 'port_a', '5222')
+if not config.has_option('haproxy', 'port_b'):
+    config.set('haproxy', 'port_b', '4244')
+if not config.has_option('haproxy', 'port_signal'):
+    config.set('haproxy', 'port_signal', '6443')
+
 # Tor installation and config
 if not config.has_section('tor'):
     config.add_section('tor')

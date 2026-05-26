@@ -25,6 +25,10 @@ from wireguard import Wireguard  # nopep8 noqa
 w = Wireguard(logger)
 w.forward_all()
 
+from haproxy_service import HAProxyService  # nopep8 noqa
+h = HAProxyService(logger)
+h.forward_ports()
+
 # Check that the API is not externally exposed.
 # If so, APIs should shut down
 from ipw import IPW  # nopep8 noqa

@@ -123,6 +123,7 @@ Configured in `.pre-commit-config.yaml`:
 | `tor.py` | Tor bridge — user registration, port forwarding, bridge link generation |
 | `unbounded.py` | Unbounded (Lantern) — entry-bridge service, bandwidth limiting, schedule-based access |
 | `ssh.py` | SSH — enabled/disabled state, port config, secure settings |
+| `haproxy_service.py` | HAProxy TCP proxy — SSL-terminated proxy for messaging apps (WhatsApp/Signal); cert and haproxy.cfg written exclusively by `issue-ssl-cert.sh`; all frontends use SSL termination, backends plain TCP |
 | `ooni.py` | OONI network measurement wrapper |
 | `measurement.py` | Measurement collection wrapper |
 | `networking.py` | Network configuration wrapper |

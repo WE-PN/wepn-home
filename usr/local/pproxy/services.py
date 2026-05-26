@@ -13,6 +13,7 @@ from unbounded import Unbounded
 from wifi import WiFi
 from wireguard import Wireguard
 from wstatus import WStatus
+from haproxy_service import HAProxyService
 
 try:
     from configparser import configparser
@@ -38,6 +39,7 @@ class Services:
         self.services.append({'name': 'unbounded', 'obj': Unbounded(logger)})
         self.services.append({'name': 'wifi', 'obj': WiFi(logger)})
         self.services.append({'name': 'wireguard', 'obj': Wireguard(logger)})
+        self.services.append({'name': 'haproxy', 'obj': HAProxyService(logger)})
         self.logger = logger
         path = SERVICE_FILE_BASE + "/services.ini"
         self.service_config = WStatus(logger, source_file=path)

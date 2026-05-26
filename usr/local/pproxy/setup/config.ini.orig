@@ -66,6 +66,13 @@ zone_id =
 record_id =
 issue_certbot_ssl = 0
 
+[haproxy]
+enabled = 0
+port_ssl = 443
+port_a = 5222
+port_b = 4244
+port_signal = 6443
+
 [tor]
 enabled = 1
 email = 1

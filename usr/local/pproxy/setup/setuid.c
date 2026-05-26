@@ -4,7 +4,7 @@
 #include <stdlib.h>
 
 //#define DEBUG
-#define SRV_CNT 7
+#define SRV_CNT 8
 #define CMD_CNT 6
 #define SPECIAL_CMD_CNT 31
 
@@ -54,6 +54,7 @@ int main(int argc, char * argv[])
 	services[4]="ssh";
 	services[5]="vncserver-x11-serviced";
 	services[6]="wepn-unbounded";
+	services[7]="wepn-haproxy";
 
 
 	const char* commands[CMD_CNT];
