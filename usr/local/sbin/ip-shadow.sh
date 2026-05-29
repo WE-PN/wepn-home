@@ -1,5 +1,6 @@
 iptables -F SHADOWSOCKS
 iptables -N SHADOWSOCKS
+# shadowsocks does not route remote clients to local IP ranges
 iptables -t filter -A SHADOWSOCKS -d 192.168.1.1 -j ACCEPT
 iptables -t filter -A SHADOWSOCKS -d 127.0.0.0/8 -j REJECT
 iptables -t filter -A SHADOWSOCKS -d 10.0.0.0/8 -j REJECT
