@@ -41,7 +41,7 @@ forward_all_traffic() {
 			iptables -t mangle -A OUTPUT ! -o lo ! -d $ip_address -p $proto -m owner --uid-owner $USER --dport $dport -m $proto -j MARK --set-mark $MARK
 			ip6tables -t mangle -A OUTPUT ! -o lo ! -d $ip_address -p $proto -m owner --uid-owner $USER --dport $dport -m $proto -j MARK --set-mark $MARK
 		done
-		iptables -t nat -A OUTPUT -p $proto -m mark --mark 10 -j REDIRECT --to-ports 8999
+		iptables -t nat -A OUTPUT -p $proto -m mark --mark $MARK -j REDIRECT --to-ports $DEST_PORT
 	done
 }
 
