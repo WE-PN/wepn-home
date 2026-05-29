@@ -79,12 +79,12 @@ chown pproxy:pproxy /var/local/pproxy/*
 chown pproxy:pproxy /var/local/pproxy/.*
 chown pproxy:pproxy /var/local/pproxy/shadow/*
 
-# allow API server to write to these
-for CONF in status.ini error.log
-do
-	chown pproxy:shadow-runners /var/local/pproxy/$CONF
-	chmod g+w /var/local/pproxy/$CONF
-done
+# status.ini: pproxy rw, shadow-runners r-only (contains secrets — no world read)
+chown pproxy:shadow-runners /var/local/pproxy/status.ini
+chmod 0640 /var/local/pproxy/status.ini
+# error.log: allow API server to write
+chown pproxy:shadow-runners /var/local/pproxy/error.log
+chmod g+w /var/local/pproxy/error.log
 
 echo -e "correcting scripts that run as sudo"
 for SCRIPT in ip-shadow restart-pproxy update-pproxy update-system wepn_git prevent_location_issue iptables-flush check-venv limit_bandwidth permissions

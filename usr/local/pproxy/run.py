@@ -5,6 +5,8 @@ import json
 import logging.config
 import os
 import requests
+import subprocess  # nosec B404 - required for running update_config.py at boot
+import sys
 import time
 
 from device import Device
@@ -55,7 +57,7 @@ def check_and_restore(conf, backup, test):
             copyfile(backup, conf)
         # backup might have been created before
         # new changes were made. Do upgrades
-        exec(open(UPDATE_SCRIPT).read())  # nosec: fixed path python file
+        subprocess.run([sys.executable, UPDATE_SCRIPT], check=True)  # nosec B603 - both args are hardcoded constants, no user input
 
 
 check_and_restore(CONFIG_FILE, CONFIG_FILE_BACKUP, ["mqtt", "username"])

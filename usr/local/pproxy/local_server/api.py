@@ -1,11 +1,8 @@
 import json
 import flask
 import logging.config
-import os
 import shlex
-import shutil
 import sys
-import tempfile
 
 from flask import request
 
@@ -29,13 +26,14 @@ CONFIG_FILE = '/etc/pproxy/config.ini'
 config = configparser.ConfigParser()
 config.read(CONFIG_FILE)
 
-tmpdir = tempfile.mkdtemp()
-api_log_file = os.path.join(tmpdir, 'api-error.log')
-logging.basicConfig(filename=api_log_file,
-                    encoding='utf-8',
-                    level=logging.ERROR,
-                    filemode='w',
-                    format='%(process)d-%(levelname)s-%(message)s')
+# leaving this for future debugging times
+# tmpdir = tempfile.mkdtemp()
+# api_log_file = os.path.join(tmpdir, 'api-error.log')
+# logging.basicConfig(filename=api_log_file,
+#                    encoding='utf-8',
+#                    level=logging.ERROR,
+#                    filemode='w',
+#                    format='%(process)d-%(levelname)s-%(message)s')
 
 logger = logging.getLogger("local-api")
 
@@ -230,4 +228,4 @@ def get_error_log():
 if __name__ == '__main__':
     app.run(host='0.0.0.0',  # nosec: need all, https://go.we-pn.com/waiver-2
             ssl_context='adhoc')
-    shutil.rmtree(tmpdir)
+    # shutil.rmtree(tmpdir)

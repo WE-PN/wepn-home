@@ -41,7 +41,7 @@ class WStatus:
                 try:
                     with os.fdopen(fd, 'w') as f:
                         self.status.write(f)
-                    os.chmod(tmp_path, 0o644)
+                    os.chmod(tmp_path, 0o640)
                     os.replace(tmp_path, self.source_file)
                     self.orig_hash = new_hash
                 except Exception:

@@ -26,6 +26,8 @@ chown -R pproxy:pproxy $PPROXY_HOME/.*
 mkdir -p /var/local/pproxy
 mkdir -p /var/local/pproxy/shadow/
 touch /var/local/pproxy/status.ini
+chown pproxy:shadow-runners /var/local/pproxy/status.ini
+chmod 0640 /var/local/pproxy/status.ini
 chown pproxy:pproxy /var/local/pproxy
 chown pproxy:pproxy /var/local/pproxy/*
 chown pproxy:pproxy /var/local/pproxy/.*

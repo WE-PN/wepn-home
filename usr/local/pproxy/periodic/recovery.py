@@ -7,9 +7,8 @@ up_dir = os.path.dirname(os.path.abspath(__file__)) + '/../'
 sys.path.append(up_dir)
 from device import Device  # nopep8
 from services import Services  # nopep8
+from constants import LOG_CONFIG as LOG_CONFIG
 
-
-LOG_CONFIG = "/etc/pproxy/logging-debug.ini"
 logging.config.fileConfig(LOG_CONFIG,
                           disable_existing_loggers=False)
 
