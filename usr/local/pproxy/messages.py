@@ -70,7 +70,6 @@ class Messages():
         }
         headers = {"Content-Type": "application/json"}
         data_json = json.dumps(data)
-        self.logger.info(data_json)
         response = requests.patch(url, data=data_json, headers=headers, timeout=GET_TIMEOUT)
         if response.status_code != 200:
             self.logger.critical("Cannot mark message as read: " + str(response.content))
