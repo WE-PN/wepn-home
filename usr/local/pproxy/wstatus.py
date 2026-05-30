@@ -1,3 +1,4 @@
+import grp
 import io
 import json
 import os
@@ -42,6 +43,11 @@ class WStatus:
                     with os.fdopen(fd, 'w') as f:
                         self.status.write(f)
                     os.chmod(tmp_path, 0o640)
+                    try:
+                        gid = grp.getgrnam('shadow-runners').gr_gid
+                        os.chown(tmp_path, -1, gid)
+                    except (KeyError, OSError):
+                        pass
                     os.replace(tmp_path, self.source_file)
                     self.orig_hash = new_hash
                 except Exception:
