@@ -1,0 +1,17 @@
+[Unit]
+Description=WEPN HAProxy TCP Proxy
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/var/local/pproxy/haproxy/haproxy.cfg
+
+[Service]
+Type=notify
+ExecStartPre=/usr/sbin/haproxy -c -f /var/local/pproxy/haproxy/haproxy.cfg
+ExecStart=/usr/sbin/haproxy -Ws -f /var/local/pproxy/haproxy/haproxy.cfg -p /run/wepn-haproxy.pid
+ExecReload=/bin/kill -USR2 $MAINPID
+PIDFile=/run/wepn-haproxy.pid
+KillMode=mixed
+Restart=no
+
+[Install]
+WantedBy=multi-user.target
