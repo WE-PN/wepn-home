@@ -1,7 +1,6 @@
 from sanitize_filename import sanitize
 import base64
 import hashlib
-import json
 import os
 import re
 import shlex
@@ -319,9 +318,3 @@ class Wireguard(Service):
             },
         }
         return settings_json
-
-    def configure(self, json_conf):
-        self.service_config.set_service_config(self.name, json.dumps(json_conf))
-        # not adding change_mode at this point, as it needs some validation
-        self.set_enabled(json_conf["enabled"])
-        return

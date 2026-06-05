@@ -89,7 +89,3 @@ class HAProxyService(Service):
             "settings": {"enabled": self.is_enabled()},
             "secure_settings": {"nonce": "", "data": ""}
         }
-
-    def configure(self, json_conf):
-        self.service_config.set_service_config(self.name, json_conf)
-        self.set_enabled(json_conf.get("enabled", False))

@@ -208,15 +208,15 @@ class Service:
 
     def configure(self, str_conf):
         try:
-            if isinstance(str_conf, str):
-                json_conf = json.loads(str_conf)
-            else:
-                json_conf = str_conf
-            self.set_enabled(json_conf["enabled"])
-            self.service_config.set_service_config(self.name, json.dumps(json_conf))
+            json_conf = json.loads(str_conf) if isinstance(str_conf, str) else str_conf
+            if not isinstance(json_conf, dict):
+                return
+            self.service_config.set_service_config(self.name, json_conf)
             self.service_config.save()
+            if "enabled" in json_conf:
+                self.set_enabled(json_conf["enabled"])
         except:
-            self.logger.exception("error setting enabled")
+            self.logger.exception("error in configure")
         return
 
     def get_overlayable_config_value(self, field_name, default=None):

@@ -719,8 +719,3 @@ class Shadow(Service):
             },
         }
         return settings_json
-
-    def configure(self, json_conf):
-        self.service_config.set_service_config(self.name, json.dumps(json_conf))
-        self.set_enabled(json_conf["enabled"])
-        return
