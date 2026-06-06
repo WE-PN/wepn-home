@@ -29,7 +29,7 @@ def pproxy_cfg():
     return config
 
 
-class TestState:
+class SessionState:
     def __init__(self):
         self.auth_token = "#nosec:JUSTAPLACEHOLDER"
         self.friend_id = None
@@ -41,7 +41,7 @@ class TestState:
 
 @pytest.fixture(scope="session")
 def state():
-    return TestState()
+    return SessionState()
 
 
 def decode_base64(encoded_str):
