@@ -1,5 +1,7 @@
 import requests
 import json
+import os
+import subprocess
 import pytest
 import time
 import sqlite3
@@ -10,6 +12,7 @@ TEST_CONFIG = 'dev_config.ini'
 # TEST_CONFIG = 'prod_config.ini'
 STATUS_FILE = '/var/local/pproxy/status.ini'
 PPROXY_CONFIG = '/etc/pproxy/config.ini'
+NETWORKING_FILE = '/var/local/pproxy/networking.ini'
 
 
 @pytest.fixture(scope="session")
@@ -152,6 +155,57 @@ def pytest_runtest_makereport(item, call):
             # only add additional html on failure
             extra.append(pytest_html.extras.html('<div>Failed Instance</div>'))
     report.extra = extra
+
+
+def test_if_upd_hook_installed():
+    """if-up.d hook must exist and be executable so iptables rules survive interface restarts."""
+    hook = '/etc/network/if-up.d/wepn-iptables'
+    assert os.path.isfile(hook), f"{hook} not found — run post-install.sh"
+    assert os.access(hook, os.X_OK), f"{hook} is not executable"
+
+
+def test_geo_directory_exists():
+    """Geo IP list directory must exist so prevent_location_issue.sh has a stable write target."""
+    assert os.path.isdir('/var/local/pproxy/geo'), \
+        "/var/local/pproxy/geo not found — run post-install.sh or permissions.sh"
+
+
+def test_pproxy_running_after_networking_start():
+    """wepn-main must still be active after startup — catches Networking.start() exceptions."""
+    result = subprocess.run(
+        ['systemctl', 'is-active', 'wepn-main'],
+        capture_output=True, text=True
+    )
+    assert result.stdout.strip() == 'active', \
+        "wepn-main is not active — Networking.start() may have thrown on startup"
+
+
+def test_networking_iptables_consistent_with_config():
+    """iptables OUTPUT rules must match the configured uplink/routing-mode in networking.ini."""
+    networking = configparser.ConfigParser()
+    networking.read(NETWORKING_FILE)
+    if not networking.has_section('networking'):
+        pytest.skip("networking.ini has no [networking] section — not configured")
+
+    uplink = networking.get('networking', 'uplink', fallback='direct').strip()
+    routing_mode = networking.get('networking', 'routing-mode', fallback='none').strip()
+
+    result = subprocess.run(
+        ['iptables', '-t', 'nat', '-L', 'OUTPUT', '-n'],
+        capture_output=True, text=True
+    )
+    if result.returncode == 4:
+        pytest.skip("iptables requires root — re-run as root to verify rule state")
+
+    has_redirect = 'REDIRECT' in result.stdout
+    expects_rules = (uplink != 'direct') and (routing_mode != 'none')
+
+    if expects_rules:
+        assert has_redirect, \
+            f"Expected REDIRECT rules in nat OUTPUT for uplink={uplink} routing-mode={routing_mode}, found none"
+    else:
+        assert not has_redirect, \
+            f"Expected no REDIRECT rules for uplink={uplink} routing-mode={routing_mode}, but found some"
 
 
 @pytest.mark.dependency()

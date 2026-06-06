@@ -49,6 +49,7 @@ w="warp-cli --accept-tos"
 pproxy_config_file="/etc/pproxy/config.ini"
 pproxy_status_file="/var/local/pproxy/status.ini"
 pproxy_networking_file="/var/local/pproxy/networking.ini"
+GEO_DIR=/var/local/pproxy/geo
 
 
 get_conf_value "uplink" "tor" $pproxy_networking_file
@@ -74,7 +75,7 @@ echo $UPLINK
 case $UPLINK in
 	"direct")
 		need_warp=0
-		DEST_RPOT=0
+		DEST_PORT=0
 		;;
 
 	"tor")
@@ -126,30 +127,25 @@ case $UPLINK_MODE in
 		# should not see an impact and know this traffic is proxies.
 
 		# See https://go.we-pn.com/wrong-location
-		wget -4 -T10 https://www.gstatic.com/ipranges/goog.txt -O goog.txt
-		wget -4 -T10 https://www.gstatic.com/ipranges/cloud.json -O cloud.json
+		mkdir -p "$GEO_DIR"
+		wget -4 -T10 https://www.gstatic.com/ipranges/goog.txt -O "$GEO_DIR/goog.txt"
+		wget -4 -T10 https://www.gstatic.com/ipranges/cloud.json -O "$GEO_DIR/cloud.json"
 		# google ones
 		#
 		# TODO: exteremly unlikely, but to be safe need to sanitize the incoming text files too
 
-		for ip in `cat goog.txt | grep -v 8\.8\.`; do
+		for ip in `cat "$GEO_DIR/goog.txt" | grep -v 8\.8\.`; do
 			do_geo_iptables $ip
 		done
 
 		echo "doing cloud now"
 
 		# cloud ones
-		jq -c ".${str}" cloud.json | while read ip; do
+		jq ".prefixes[].ipv4Prefix" "$GEO_DIR/cloud.json"  -c --raw-output | grep -v null | while read ip; do
 			do_geo_iptables $ip
 		done
 
-		jq ".prefixes[].ipv4Prefix" cloud.json  -c --raw-output | grep -v null | while read ip; do
-			do_geo_iptables $ip
-		done
-
-
-
-		jq ".prefixes[].ipv6Prefix" cloud.json  -c --raw-output | grep -v null | while read ip; do
+		jq ".prefixes[].ipv6Prefix" "$GEO_DIR/cloud.json"  -c --raw-output | grep -v null | while read ip; do
 			do_geo_iptables $ip
 		done
 		;;

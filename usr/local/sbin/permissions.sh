@@ -25,6 +25,7 @@ chown -R pproxy:pproxy $PPROXY_HOME/*
 chown -R pproxy:pproxy $PPROXY_HOME/.*
 mkdir -p /var/local/pproxy
 mkdir -p /var/local/pproxy/shadow/
+mkdir -p /var/local/pproxy/geo
 touch /var/local/pproxy/status.ini
 chown pproxy:pproxy /var/local/pproxy
 chown pproxy:pproxy /var/local/pproxy/*

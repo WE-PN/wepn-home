@@ -73,6 +73,7 @@ chown -R pproxy:pproxy $PPROXY_HOME/*
 chown -R pproxy:pproxy $PPROXY_HOME/.*
 mkdir -p /var/local/pproxy
 mkdir -p /var/local/pproxy/shadow/
+mkdir -p /var/local/pproxy/geo
 touch /var/local/pproxy/status.ini
 chown pproxy:pproxy /var/local/pproxy
 chown pproxy:pproxy /var/local/pproxy/*
@@ -485,6 +486,12 @@ chown pproxy:pproxy $FLG
 if [ $OS_VERSION == "bullseye" ]; then
 	/bin/bash /usr/local/pproxy/setup/freeze_kernel.sh
 fi
+##############################################################################
+# Install if-up.d hook to re-apply iptables rules on network interface up
+##############################################################################
+cp $PPROXY_HOME/setup/if-up-wepn.sh /etc/network/if-up.d/wepn-iptables
+chmod +x /etc/network/if-up.d/wepn-iptables
+
 # Fix the permissions
 /bin/bash /usr/local/sbin/permissions.sh
 ##############################################################################
