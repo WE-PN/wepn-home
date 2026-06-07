@@ -136,9 +136,12 @@ class PProxy():
         return tunnel
 
     def save_state(self, new_state, lcd_print=0, hb_send=True):
-        self.status.reload()
-        self.status.set('state', new_state)
-        self.status.save()
+        with self.mqtt_lock:
+            self.status.reload()
+            self.status.set('state', new_state)
+            self.status.set('mqtt', self.mqtt_connected)
+            self.status.set('mqtt-reason', self.mqtt_reason)
+            self.status.save()
         if hb_send:
             self.logger.debug('heartbeat from save_state ' + new_state)
             heart_beat = HeartBeat(self.loggers["heartbeat"])
@@ -315,10 +318,6 @@ class PProxy():
         self.logger.info("Connected with result code " + str(reason_code))
         self.mqtt_connected = 1
         self.mqtt_reason = reason_code
-        self.status.reload()
-        self.status.set('mqtt', 1)
-        self.status.set('mqtt-reason', reason_code)
-        self.status.save()
 
         # Subscribing in on_connect() means that if we lose the connection and
         # reconnect then subscriptions will be renewed.
@@ -333,7 +332,7 @@ class PProxy():
         # sending heartbeat might take too long and make MQTT fail
         # hence the False parameter for hb_send
         # self.save_state("2", 1, False)
-        th = Thread(target=self.save_state, args=("2"))
+        th = Thread(target=self.save_state, args=("2",))
         th.start()
 
     # prevent directory traversal attacks by checking final path
@@ -609,12 +608,13 @@ class PProxy():
         self.leds.pulse(color=(255, 255, 0),
                         wait=50,
                         repetitions=50)
-        self.status.reload()
         self.mqtt_connected = 0
         self.mqtt_reason = reason_code
-        self.status.set('mqtt', 0)
-        self.status.set('mqtt-reason', reason_code)
-        self.status.save()
+        with self.mqtt_lock:
+            self.status.reload()
+            self.status.set('mqtt', 0)
+            self.status.set('mqtt-reason', reason_code)
+            self.status.save()
 
     def fetch_config(self, services):
         try:

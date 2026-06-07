@@ -118,9 +118,13 @@ class TestPProxy(unittest.TestCase):
     # --- save_state ---
 
     def test_save_state_updates_status_file(self):
+        self.pp.mqtt_connected = 1
+        self.pp.mqtt_reason = 0
         with patch('pproxy.HeartBeat'):
             self.pp.save_state('2')
         self.pp.status.set.assert_any_call('state', '2')
+        self.pp.status.set.assert_any_call('mqtt', 1)
+        self.pp.status.set.assert_any_call('mqtt-reason', 0)
         self.pp.status.save.assert_called()
 
     def test_save_state_sends_heartbeat_by_default(self):
@@ -176,7 +180,6 @@ class TestPProxy(unittest.TestCase):
         with patch('pproxy.Thread'):
             self.pp.on_connect(MagicMock(), None, None, 0)
         self.assertEqual(self.pp.mqtt_connected, 1)
-        self.pp.status.set.assert_any_call('mqtt', 1)
 
     def test_on_connect_subscribes_to_device_topic(self):
         mock_client = MagicMock()
