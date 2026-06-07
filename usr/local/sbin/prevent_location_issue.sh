@@ -52,12 +52,20 @@ pproxy_networking_file="/var/local/pproxy/networking.ini"
 GEO_DIR=/var/local/pproxy/geo
 
 
-get_conf_value "uplink" "tor" $pproxy_networking_file
+get_conf_value "uplink" "" $pproxy_networking_file
 UPLINK=$ret
+if [ -z "$UPLINK" ]; then
+	get_conf_value "uplink" "tor" $pproxy_config_file
+	UPLINK=$ret
+fi
 
 # Mode of operation for uplink
-get_conf_value "routing-mode" "none" $pproxy_networking_file
+get_conf_value "routing-mode" "" $pproxy_networking_file
 UPLINK_MODE=$ret
+if [ -z "$UPLINK_MODE" ]; then
+	get_conf_value "routing-mode" "geo" $pproxy_config_file
+	UPLINK_MODE=$ret
+fi
 
 get_conf_value "warp-port" "8971" $pproxy_config_file
 warp_port=$ret

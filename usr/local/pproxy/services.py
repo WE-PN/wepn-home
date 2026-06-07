@@ -220,7 +220,7 @@ class Services:
         else:
             config_json = json.loads(config_data)
 
-        for service_config in config_json["services"]:
+        for service_config in config_json.get("services", []):
             service_name = service_config["name"].lower()
             found = False
             for service in self.services:

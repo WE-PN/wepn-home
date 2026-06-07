@@ -83,3 +83,7 @@ orport = 8991
 enabled = 1
 email = 1
 wireport = 6711
+
+[networking]
+uplink = tor
+routing-mode = geo

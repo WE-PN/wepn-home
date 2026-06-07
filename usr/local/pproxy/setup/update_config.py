@@ -234,6 +234,15 @@ if not status.has_section('networking'):
     # all-traffic, geo
     status.set('networking', 'routing-mode', "geo")
 
+# fallback defaults in config.ini so prevent_location_issue.sh has safe values
+# when networking.ini is absent or empty (e.g. server sent empty config)
+if not config.has_section('networking'):
+    config.add_section('networking')
+if not config.has_option('networking', 'uplink'):
+    config.set('networking', 'uplink', 'tor')
+if not config.has_option('networking', 'routing-mode'):
+    config.set('networking', 'routing-mode', 'geo')
+
 # WARP installation and config
 if not config.has_section('warp'):
     config.add_section('warp')
