@@ -176,7 +176,8 @@ class Wireguard(Service):
         usage = {}
         for certname in users:
             try:
-                usage[certname] = 1 if self.usage.get_record_for_cert(certname)['short_term'] > 0 else 0
+                record = self.usage.get_record_for_cert(certname)
+                usage[certname] = 1 if record is not None and record['short_term'] > 0 else 0
             except Exception:
                 self.logger.exception(f"Error getting usage for WireGuard user {certname}")
                 usage[certname] = -1

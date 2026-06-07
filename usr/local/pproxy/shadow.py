@@ -348,8 +348,8 @@ class Shadow(Service):
         for server in server_list:
             certname = server['certname']
             try:
-                usage[certname] = 1 if self.usage.get_record_for_cert(certname)[
-                    'short_term'] > 0 else 0
+                record = self.usage.get_record_for_cert(certname)
+                usage[certname] = 1 if record is not None and record['short_term'] > 0 else 0
             except:
                 self.logger.exception(f"Error getting usage for server {certname}")
                 usage[certname] = -1

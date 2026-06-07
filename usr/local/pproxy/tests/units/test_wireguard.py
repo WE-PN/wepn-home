@@ -139,10 +139,10 @@ class TestWireguardUsage(unittest.TestCase):
 
     @patch('wireguard.Wireguard.get_users_list', return_value=['alice'])
     def test_get_usage_status_summary_never_connected(self, mock_users):
-        # No DB record: get_record_for_cert returns None, None['short_term'] raises → -1
+        # No DB record: get_record_for_cert returns None → treated as no usage
         self.wg.usage.get_record_for_cert.return_value = None
         result = self.wg.get_usage_status_summary()
-        self.assertEqual(result['alice'], -1)
+        self.assertEqual(result['alice'], 0)
 
     # --- get_usage_deltas ---
 
