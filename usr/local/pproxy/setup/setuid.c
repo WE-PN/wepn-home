@@ -144,13 +144,21 @@ int main(int argc, char * argv[])
 	}
 	char* ptr;
 	t = strtol(argv[1], &ptr, 10);
+	if (ptr == argv[1] || *ptr != '\0') {
+		printf("Invalid type argument: %s\n", argv[1]);
+		return(-1);
+	}
 	s = strtol(argv[2], &ptr, 10);
+	if (ptr == argv[2] || *ptr != '\0') {
+		printf("Invalid index argument: %s\n", argv[2]);
+		return(-1);
+	}
 #ifdef DEBUG
 	printf("t=%d s=%d argc=%d\n", t, s, argc);
 #endif
 
 
-	if (s >= SPECIAL_CMD_CNT || t > 3) {
+	if (s < 0 || s >= SPECIAL_CMD_CNT || t < 0 || t > 3) {
 		printf("S=%d T=%d\n", s, t);
 		printf("# commands = %d\n", SPECIAL_CMD_CNT);
 		printf("Out of range index\n");
@@ -165,7 +173,11 @@ int main(int argc, char * argv[])
 		}
 		// get the command index:
 		c = strtol(argv[3], &ptr, 10);
-		if (c >= CMD_CNT) {
+		if (ptr == argv[3] || *ptr != '\0') {
+			printf("Invalid command argument: %s\n", argv[3]);
+			return(-1);
+		}
+		if (c < 0 || c >= CMD_CNT) {
 			printf("Out of range commands index\n");
 			return(-1);
 		}
