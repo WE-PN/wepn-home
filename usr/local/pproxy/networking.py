@@ -17,6 +17,7 @@ class Networking(Service):
         return
 
     def configure(self, str_conf):
+        self.service_config.reload()
         prev_uplink = self.service_config.get_field(self.name, 'uplink')
         prev_mode = self.service_config.get_field(self.name, 'routing-mode')
         super().configure(str_conf)
