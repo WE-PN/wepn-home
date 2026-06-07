@@ -34,12 +34,17 @@ do_geo_iptables() {
 
 forward_all_traffic() {
 	website="we-pn.com"
-	ip_address=$(host -t A "$website" | awk '/has address/ {print $4}')
+	ip_address=$(host -t A "$website" | awk '/has address/ {print $4}' | head -1)
+	ip6_address=$(host -t AAAA "$website" | awk '/has IPv6 address/ {print $5}' | head -1)
 	iptables -t mangle -A POSTROUTING -o wg0 -j MARK --set-xmark $MARK
 	for proto in tcp udp; do
 		for dport in "80" "443"; do
-			iptables -t mangle -A OUTPUT ! -o lo ! -d $ip_address -p $proto -m owner --uid-owner $USER --dport $dport -m $proto -j MARK --set-mark $MARK
-			ip6tables -t mangle -A OUTPUT ! -o lo ! -d $ip_address -p $proto -m owner --uid-owner $USER --dport $dport -m $proto -j MARK --set-mark $MARK
+			if [ -n "$ip_address" ]; then
+				iptables -t mangle -A OUTPUT ! -o lo ! -d $ip_address -p $proto -m $proto --dport $dport -m owner --uid-owner $USER -j MARK --set-mark $MARK
+			fi
+			if [ -n "$ip6_address" ]; then
+				ip6tables -t mangle -A OUTPUT ! -o lo ! -d $ip6_address -p $proto -m $proto --dport $dport -m owner --uid-owner $USER -j MARK --set-mark $MARK
+			fi
 		done
 		iptables -t nat -A OUTPUT -p $proto -m mark --mark $MARK -j REDIRECT --to-ports $DEST_PORT
 	done
