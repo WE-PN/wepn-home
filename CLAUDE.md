@@ -1,5 +1,9 @@
 # WEPN Home Device — Claude Guide
 
+## Rules
+
+**NEVER commit without asking the user first.**
+
 ## Project Overview
 
 This repo is the Raspberry Pi (Debian package) component of the WEPN ecosystem. The physical device is called a **WEPN Pod**. It runs VPN/tunnel server software (`pproxy`) on an RPi and communicates with the WEPN backend server and mobile app (separate repos at source.we-pn.com).
