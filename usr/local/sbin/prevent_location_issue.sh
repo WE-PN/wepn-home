@@ -58,18 +58,18 @@ GEO_DIR=/var/local/pproxy/geo
 
 
 get_conf_value "uplink" "" $pproxy_networking_file
-UPLINK=$ret
+UPLINK=${ret,,}
 if [ -z "$UPLINK" ]; then
 	get_conf_value "uplink" "tor" $pproxy_config_file
-	UPLINK=$ret
+	UPLINK=${ret,,}
 fi
 
 # Mode of operation for uplink
 get_conf_value "routing-mode" "" $pproxy_networking_file
-UPLINK_MODE=$ret
+UPLINK_MODE=${ret,,}
 if [ -z "$UPLINK_MODE" ]; then
 	get_conf_value "routing-mode" "geo" $pproxy_config_file
-	UPLINK_MODE=$ret
+	UPLINK_MODE=${ret,,}
 fi
 
 get_conf_value "warp-port" "8971" $pproxy_config_file
@@ -165,7 +165,7 @@ case $UPLINK_MODE in
 	"none")
 		echo "No uplink path selected, direct routing enabled"
 		;;
-	"all-traffic")
+	"all-traffic"|"all")
 		# all traffic is routed
 		# this is helpful for when someone is just using their IP as entry point,
 		# but exits are through Tor/WARP
