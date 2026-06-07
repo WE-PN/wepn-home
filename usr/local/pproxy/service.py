@@ -61,7 +61,10 @@ class Service:
         # TODO: this is a workaround until we update service name everywhere
         service_config_name = self.get_config_section_name()
         if self.config.has_section(service_config_name):
-            service_present = (int(self.config.get(service_config_name, 'enabled')) == 1)
+            if self.config.has_option(service_config_name, 'enabled'):
+                service_present = (int(self.config.get(service_config_name, 'enabled')) == 1)
+            else:
+                service_present = True
             service_active = self.service_config.get_service_status(self.name)
             return service_present and service_active
         else:
