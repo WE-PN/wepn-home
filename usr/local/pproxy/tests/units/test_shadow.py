@@ -438,7 +438,7 @@ class TestShadow(unittest.TestCase):
         mock_servers_table.find_one.return_value = None
 
         results, deltas = self.shadow_service.get_usage_for_servers()
-        self.assertEqual(deltas['user1'], -1)
+        self.assertEqual(deltas['user1'], 0)
 
     @patch('usage.Usage.db_query')
     @patch('shadow.Shadow.db_query')

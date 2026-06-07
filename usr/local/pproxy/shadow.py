@@ -401,14 +401,15 @@ class Shadow(Service):
                         usage_statuses[server['certname']] = 1
                     else:
                         usage_statuses[server['certname']] = 0
+                    if periodic:
+                        usage_deltas[server['certname']] = long_term_delta * 8
+                    else:
+                        usage_deltas[server['certname']] = short_term_delta * 8
                 else:
                     self.logger.debug(
                         "port=" + str(server['server_port']) + " not found in current reading")
                     usage_statuses[server['certname']] = -1
-                if periodic:
-                    usage_deltas[server['certname']] = long_term_delta * 8
-                else:
-                    usage_deltas[server['certname']] = short_term_delta * 8
+                    usage_deltas[server['certname']] = 0
             except Exception as e:
                 self.logger.error("Error getting usage for server " +
                                   server['certname'] + ": " + str(e))
