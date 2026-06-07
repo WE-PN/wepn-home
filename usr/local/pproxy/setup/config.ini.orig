@@ -85,5 +85,6 @@ email = 1
 wireport = 6711
 
 [networking]
+enabled = 1
 uplink = tor
 routing-mode = geo

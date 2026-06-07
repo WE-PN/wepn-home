@@ -238,6 +238,8 @@ if not status.has_section('networking'):
 # when networking.ini is absent or empty (e.g. server sent empty config)
 if not config.has_section('networking'):
     config.add_section('networking')
+if not config.has_option('networking', 'enabled'):
+    config.set('networking', 'enabled', '1')
 if not config.has_option('networking', 'uplink'):
     config.set('networking', 'uplink', 'tor')
 if not config.has_option('networking', 'routing-mode'):
