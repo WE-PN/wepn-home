@@ -1,5 +1,4 @@
 import atexit
-import json
 
 from device import Device
 from device import SRUN as SRUN
@@ -92,8 +91,13 @@ class Unbounded(Service):
         return settings_json
 
     def configure(self, json_conf):
-        self.service_config.set_service_config(self.name, json.dumps(json_conf))
-        self.service_config.save()
+        prev_limit = self.get_limit()
+        super().configure(json_conf)
+        new_limit = self.get_limit()
+        if new_limit != prev_limit:
+            self.logger.info(f"bw-limit changed ({prev_limit} -> {new_limit}), reapplying")
+            device = Device(self.logger)
+            device.execute_setuid(f"1 23 set unbounded eth0 {new_limit}")
         self.self_test()
         self.recover_missing_servers()
         return

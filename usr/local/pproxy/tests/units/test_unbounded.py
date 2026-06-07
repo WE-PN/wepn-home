@@ -133,13 +133,38 @@ class TestUnbounded(unittest.TestCase):
         self.ub.recover_missing_servers = MagicMock()
         self.ub.self_test = MagicMock()
 
-        conf = {"enabled": True, "bw-limit": "100kbit"}
-        self.ub.configure(conf)
+        conf = {"bw-limit": "100kbit"}
+        with patch.object(self.ub, 'get_limit', side_effect=['100kbit', '100kbit']):
+            self.ub.configure(conf)
 
-        self.ub.service_config.set_service_config.assert_called_with("unbounded", json.dumps(conf))
-        self.ub.service_config.save.assert_called_once()
+        self.ub.service_config.set_service_config.assert_called_with("unbounded", conf)
+        self.ub.service_config.save.assert_called()
         self.ub.self_test.assert_called_once()
         self.ub.recover_missing_servers.assert_called_once()
+
+    def test_configure_applies_bw_limit_when_changed(self):
+        self.ub.service_config = MagicMock()
+        self.ub.recover_missing_servers = MagicMock()
+        self.ub.self_test = MagicMock()
+
+        with patch.object(self.ub, 'get_limit', side_effect=['28kbit', '10kbit']), \
+                patch('unbounded.Device') as mock_device:
+            self.ub.configure({'bw-limit': '10kbit'})
+
+        mock_device.return_value.execute_setuid.assert_called_once_with(
+            '1 23 set unbounded eth0 10kbit'
+        )
+
+    def test_configure_skips_bw_limit_when_unchanged(self):
+        self.ub.service_config = MagicMock()
+        self.ub.recover_missing_servers = MagicMock()
+        self.ub.self_test = MagicMock()
+
+        with patch.object(self.ub, 'get_limit', side_effect=['28kbit', '28kbit']), \
+                patch('unbounded.Device') as mock_device:
+            self.ub.configure({'bw-limit': '28kbit'})
+
+        mock_device.return_value.execute_setuid.assert_not_called()
 
     def test_get_usage_status_summary(self):
         self.assertEqual(self.ub.get_usage_status_summary(), {"unbounded": 1})
