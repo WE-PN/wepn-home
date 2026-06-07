@@ -78,11 +78,10 @@ chown pproxy:shadow-runners /var/local/pproxy/tor.db*
 chmod 664 /var/local/pproxy/tor.db*
 chown pproxy:shadow-runners /var/local/pproxy/shadow/shadow.sock
 chown pproxy:shadow-runners /var/local/pproxy/
-chown wepn-api $PPROXY_HOME/local_server/wepn-local.*
-chgrp wepn-web $PPROXY_HOME/local_server/wepn-local.*
-chgrp wepn-web $PPROXY_HOME/local_server/
+chown wepn-api:wepn-web $PPROXY_HOME/local_server
+chmod 770 $PPROXY_HOME/local_server
+chown wepn-api:wepn-web $PPROXY_HOME/local_server/wepn-local.*
 chmod g+r $PPROXY_HOME/local_server/wepn-local.*
-chmod 770 $PPROXY_HOME/local_server/.
 chown shadowsocks:shadow-runners /etc/shadowsocks-libev/config.json
 chmod 775 /etc/shadowsocks-libev/config.json
 chown pproxy:shadow-runners /var/local/pproxy/shadow/shadow.sock

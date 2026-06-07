@@ -558,18 +558,16 @@ class Shadow(Service):
         device = Device(self.logger)
         try:
 
-            local_down = False
+            res = None
             requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
             try:
                 res = requests.get('https://127.0.0.1:5000/',
                                    verify=False, timeout=3)  # nosec: local cert, http://go.we-pn.com/waiver-3
-            except requests.exceptions.SSLError:
-                local_down = True
+            except (requests.exceptions.SSLError,
+                    requests.exceptions.ReadTimeout,
+                    requests.exceptions.ConnectionError):
                 pass
-            except requests.exceptions.ReadTimeout:
-                local_down = True
-                pass
-            if res.status_code != 200 or local_down:
+            if res is None or res.status_code != 200:
                 # the local flask API server is down, so all of these tests will fail
                 # TODO: this is not a real shadowsocks error, so need a way to convey and recover
                 self.logger.error("Local server is down")
