@@ -215,6 +215,8 @@ class Services:
             return 1
 
     def configure(self, config_data):
+        if not config_data:
+            return
         if isinstance(config_data, dict):
             config_json = config_data
         else:
