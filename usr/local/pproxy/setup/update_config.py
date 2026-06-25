@@ -3,6 +3,7 @@
 # add missing fileds, correct host
 #########################################
 import configparser
+import re
 CONFIG_FILE = '/etc/pproxy/config.ini'
 STATUS_FILE = '/var/local/pproxy/status.ini'
 PORT_STATUS_FILE = '/var/local/pproxy/port.ini'
@@ -263,3 +264,30 @@ with open(STATUS_FILE, 'w') as statusfile:
     status.write(statusfile)
 with open(PORT_STATUS_FILE, 'w') as statusfile:
     port_status.write(statusfile)
+
+
+def set_fan_temp(config_file, temp_millideg=80000, gpio_default=22):
+    with open(config_file, 'r') as f:
+        lines = f.readlines()
+    fan_indices = [i for i, line in enumerate(lines)
+                   if re.match(r'\s*dtoverlay=gpio-fan', line)]
+    if not fan_indices:
+        lines.append('dtoverlay=gpio-fan,gpiopin=%d,temp=%d\n' % (gpio_default, temp_millideg))
+        changed = True
+    else:
+        m = re.search(r'gpiopin=(\d+)', lines[fan_indices[0]])
+        gpiopin = int(m.group(1)) if m else gpio_default
+        target = 'dtoverlay=gpio-fan,gpiopin=%d,temp=%d\n' % (gpiopin, temp_millideg)
+        changed = (len(fan_indices) > 1 or lines[fan_indices[0]].strip() != target.strip())
+        lines[fan_indices[0]] = target
+        for i in reversed(fan_indices[1:]):
+            lines.pop(i)
+    if changed:
+        with open(config_file, 'w') as f:
+            f.writelines(lines)
+
+
+try:
+    set_fan_temp('/boot/firmware/config.txt')
+except Exception as e:
+    print('Warning: could not update fan config: ' + str(e))
