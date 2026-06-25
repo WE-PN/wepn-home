@@ -6,7 +6,7 @@
 //#define DEBUG
 #define SRV_CNT 8
 #define CMD_CNT 6
-#define SPECIAL_CMD_CNT 31
+#define SPECIAL_CMD_CNT 32
 
 char* _sanitize(char input[], short type) {
 	static char ok_chars[] = "abcdefghijklmnopqrstuvwxyz"
@@ -100,6 +100,7 @@ int main(int argc, char * argv[])
 	scommands[28]= "/usr/bin/apt-get -y -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confnew\" -f install redsocks";
 	scommands[29]= "/usr/bin/wg show wg0 transfer";
 	scommands[30]= "/bin/bash /usr/local/sbin/issue-ssl-cert.sh";
+	scommands[31]= "/usr/bin/vcgencmd get_throttled";
 
 #define SAFE_SNPRINTF(buf, ...) do { \
 	int _written = snprintf(buf, sizeof(buf), __VA_ARGS__); \

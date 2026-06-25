@@ -1063,6 +1063,35 @@ class Device():
             pass
         return contents
 
+    def get_throttled_raw(self):
+        try:
+            out, err, _, _ = self.execute_cmd_output(SRUN + " 1 31")
+            text = out.decode('utf-8', errors='replace').strip() if isinstance(out, bytes) else str(out).strip()
+            if '=' in text:
+                return text.split('=', 1)[1].strip()
+            return None
+        except Exception as e:
+            self.logger.warning("get_throttled_raw: " + str(e))
+            return None
+
+    def get_throttled_status(self):
+        raw = self.get_throttled_raw()
+        if not raw:
+            return []
+        try:
+            val = int(raw, 0)
+        except ValueError:
+            self.logger.warning("get_throttled_status: cannot parse: " + str(raw))
+            return []
+        warnings = []
+        if val & 0x1:
+            warnings.append("wrong charger")
+        if val & 0x6:
+            warnings.append("throttled")
+        if val & 0x8:
+            warnings.append("too hot")
+        return warnings
+
     def get_system_health_stats(self):
         try:
             dist = distro.codename()
@@ -1088,10 +1117,16 @@ class Device():
             self.logger.error(e)
             hd = 0
             hd_used = 0
+        throttle_code = None
+        try:
+            throttle_code = self.get_throttled_raw()
+        except Exception as e:
+            self.logger.error("get_system_health_stats throttle error: " + str(e))
         sys_info = {
             "os": str(dist + "-" + arch),
             "mem": round(mem / (1024**3), 2),
             "hd": round(hd / (1024**3), 2),  # Convert bytes to GB
             "hd_used": round(hd_used / (1024**3), 2),
+            "throttle_code": throttle_code,
         }
         return sys_info
