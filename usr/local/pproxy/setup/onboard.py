@@ -28,6 +28,7 @@ from lcd import LCD as LCD
 from services import Services
 from device import Device
 from constants import LOG_CONFIG
+from wstatus import write_ini_atomic
 import string
 
 COL_PINS = [26]  # BCM numbering
@@ -126,14 +127,12 @@ class OnBoard():
             self.logger.debug("i=" + str(i) + " key = " + str(key))
             i += 1
         self.status.set('status', temp_key_name, new_key)
-        with open(STATUS_FILE, 'w') as statusfile:
-            self.status.write(statusfile)
+        write_ini_atomic(STATUS_FILE, self.status)
 
     def save_state(self, new_state, lcd_print=1):
         self.status.set('status', 'state', new_state)
         self.status.set('status', 'sw', self.status.get('status', 'sw'))
-        with open(STATUS_FILE, 'w') as statusfile:
-            self.status.write(statusfile)
+        write_ini_atomic(STATUS_FILE, self.status)
         self.logger.debug('heartbeat from save_state ' + new_state)
         heart_beat = HeartBeat(self.logger)
         heart_beat.set_mqtt_state(self.mqtt_connected, self.mqtt_reason)
@@ -214,8 +213,7 @@ class OnBoard():
                 self.status.set('status', 'e2e_key', str(self.rand_e2e_key))
             with open(CONFIG_FILE, 'w') as configfile:
                 self.config.write(configfile)
-            with open(STATUS_FILE, 'w') as statusfile:
-                self.status.write(statusfile)
+            write_ini_atomic(STATUS_FILE, self.status)
             # save copies
             with open(CONFIG_FILE_BACKUP, 'w') as configfile:
                 self.config.write(configfile)

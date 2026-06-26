@@ -171,7 +171,7 @@ class KEYPAD:
             GPIO.add_event_detect(INT_EXPANDER, GPIO.FALLING, callback=self.key_press_cb)
         else:
             from gpiozero import Button
-            button = Button(5)
+            button = Button(INT_EXPANDER)
             button.when_pressed = self.key_press_cb
 
     def key_press_cb(self, channel):
