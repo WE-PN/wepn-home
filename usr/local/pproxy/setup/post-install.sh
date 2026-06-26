@@ -174,9 +174,8 @@ then
 	cp $PPROXY_HOME/setup/config.ini.orig /etc/pproxy/config.ini
 	chown pproxy:pproxy /etc/pproxy/config.ini
 	chmod 744 /etc/pproxy/config.ini
-else
-	/usr/bin/python3 $PPROXY_HOME/setup/update_config.py
 fi
+/usr/bin/python3 $PPROXY_HOME/setup/update_config.py
 
 # this was missing when using git and not dpkg
 if test /var/local/pproxy/git/home_device/etc/pproxy/acl.conf; then
@@ -398,13 +397,6 @@ else
    echo -e 'dtparam=spi=on' >> $BOOT_CONFIG
 fi
 
-echo -e "\n adjust fan threshold temperature"
-if grep -Fxq "dtoverlay=gpio-fan,gpiopin=22,temp=55000" $BOOT_CONFIG
-then
-   echo "fan aleady enabled"
-else
-   echo -e 'dtoverlay=gpio-fan,gpiopin=22,temp=55000' >> $BOOT_CONFIG
-fi
 
 echo -e "\n#### Restarting services ####"
 /usr/sbin/modprobe i2c_dev
