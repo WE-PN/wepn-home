@@ -428,9 +428,15 @@ echo -e "\n done with setuid"
 #/bin/bash install_seeedstudio.sh
 
 ##############################################################################
-# Install WARP
+# Install WARP (only if package is installed and warp-cli is available)
 ##############################################################################
-/bin/bash install_warp.sh
+if dpkg -s cloudflare-warp &>/dev/null && command -v warp-cli &>/dev/null; then
+    /bin/bash install_warp.sh
+else
+    echo "Skipping WARP setup: cloudflare-warp is not installed or warp-cli is unavailable."
+    echo "To enable WARP, install the Cloudflare WARP client manually, accept their Terms of Service,"
+    echo "and re-run this setup. See: https://developers.cloudflare.com/cloudflare-one/connections/connect-devices/warp/"
+fi
 
 
 ##############################################################################
