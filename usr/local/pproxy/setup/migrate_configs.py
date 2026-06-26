@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
 # Upload current system state as a config to the backend when the server has
 # no config yet (null) and the locally saved config version is still 1 (default).

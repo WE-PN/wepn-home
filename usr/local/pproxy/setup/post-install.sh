@@ -497,7 +497,7 @@ chmod +x /etc/network/if-up.d/wepn-iptables
 ##############################################################################
 # Migrate current device config to server if server has no config yet
 ##############################################################################
-/usr/bin/python3 $PPROXY_HOME/setup/migrate_configs.py 2>&1 || true
+$PPROXY_VENV/bin/python3 $PPROXY_HOME/setup/migrate_configs.py 2>&1 || true
 
 ##############################################################################
 echo -e "Installation of WEPN complete."

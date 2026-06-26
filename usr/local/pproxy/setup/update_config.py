@@ -3,7 +3,10 @@
 # add missing fileds, correct host
 #########################################
 import configparser
+import os
 import re
+import sys
+import tempfile
 CONFIG_FILE = '/etc/pproxy/config.ini'
 STATUS_FILE = '/var/local/pproxy/status.ini'
 PORT_STATUS_FILE = '/var/local/pproxy/port.ini'
@@ -271,23 +274,45 @@ def set_fan_temp(config_file, temp_millideg=80000, gpio_default=22):
         lines = f.readlines()
     fan_indices = [i for i, line in enumerate(lines)
                    if re.match(r'\s*dtoverlay=gpio-fan', line)]
-    if not fan_indices:
-        lines.append('dtoverlay=gpio-fan,gpiopin=%d,temp=%d\n' % (gpio_default, temp_millideg))
-        changed = True
-    else:
+    gpiopin = gpio_default
+    if fan_indices:
         m = re.search(r'gpiopin=(\d+)', lines[fan_indices[0]])
-        gpiopin = int(m.group(1)) if m else gpio_default
-        target = 'dtoverlay=gpio-fan,gpiopin=%d,temp=%d\n' % (gpiopin, temp_millideg)
-        changed = (len(fan_indices) > 1 or lines[fan_indices[0]].strip() != target.strip())
-        lines[fan_indices[0]] = target
-        for i in reversed(fan_indices[1:]):
-            lines.pop(i)
-    if changed:
-        with open(config_file, 'w') as f:
+        if m:
+            gpiopin = int(m.group(1))
+    target = 'dtoverlay=gpio-fan,gpiopin=%d,temp=%d\n' % (gpiopin, temp_millideg)
+    if len(fan_indices) == 1 and lines[fan_indices[0]].strip() == target.strip():
+        section = next(
+            (lines[j].strip() for j in range(fan_indices[0] - 1, -1, -1)
+             if re.match(r'\s*\[', lines[j])),
+            None
+        )
+        if section in ('[all]', None):
+            return
+    for i in reversed(fan_indices):
+        lines.pop(i)
+    all_indices = [i for i, line in enumerate(lines) if re.match(r'\s*\[all\]', line)]
+    if all_indices:
+        idx = all_indices[-1]
+        if not lines[idx].endswith('\n'):
+            lines[idx] += '\n'
+        lines.insert(idx + 1, target)
+    else:
+        lines.append('[all]\n')
+        lines.append(target)
+    fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(config_file))
+    try:
+        with os.fdopen(fd, 'w') as f:
             f.writelines(lines)
+        os.replace(tmp_path, config_file)
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
 
 
 try:
     set_fan_temp('/boot/firmware/config.txt')
 except Exception as e:
-    print('Warning: could not update fan config: ' + str(e))
+    sys.stderr.write('Warning: could not update fan config: ' + str(e) + '\n')
