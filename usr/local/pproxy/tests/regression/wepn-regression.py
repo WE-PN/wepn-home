@@ -72,9 +72,9 @@ def util_iterate_apis(state, local_token, expected_code, filter_auth=False):
         {"url": "/api/v1/friends/access_links/", "auth": True, },
         {"url": "/api/v1/claim/info", "auth": False, },
         {"url": "/api/v1/claim/progress", "auth": False},
-        # if unclaimed, no auth needed
-        {"url": "/api/v1/diagnostics/info", "auth": (status.get('status', 'claimed') == '0'), },
-        {"url": "/api/v1/diagnostics/error_log", "auth": True, },
+        {"url": "/api/v1/diagnostics/info", "auth": True, },
+        # error_log only requires auth when claimed
+        {"url": "/api/v1/diagnostics/error_log", "auth": (status.get('status', 'claimed') == '1'), },
     ]
     for api in apis:
         if filter_auth:

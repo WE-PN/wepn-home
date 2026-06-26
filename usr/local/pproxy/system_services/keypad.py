@@ -171,7 +171,7 @@ class KEYPAD:
             GPIO.add_event_detect(INT_EXPANDER, GPIO.FALLING, callback=self.key_press_cb)
         else:
             from gpiozero import Button
-            button = Button(5)
+            button = Button(INT_EXPANDER)
             button.when_pressed = self.key_press_cb
 
     def key_press_cb(self, channel):
@@ -385,8 +385,16 @@ class KEYPAD:
             current_key = self.status.get('status', 'temporary_key')
             current_e2e_key = self.status.get('status', 'temp_e2e_key')
             serial_number = self.config.get('django', 'serial_number')
-            display_str = [(1, "https://red.we-pn.com/?pk=" + str(current_e2e_key) + "&s=" +
-                            str(serial_number) + "&k=" + str(current_key), 2, "white"), ]
+            display_str = []
+            try:
+                throttle_warnings = self.device.get_throttled_status()
+            except Exception:
+                throttle_warnings = []
+            if throttle_warnings:
+                display_str.append((1, throttle_warnings[0], 0, "orange"))
+            display_str.append((len(display_str) + 1,
+                                "https://red.we-pn.com/?pk=" + str(current_e2e_key) + "&s=" +
+                                str(serial_number) + "&k=" + str(current_key), 2, "white"))
             if self.screen_timed_out is False:
                 self.lcd.display(display_str, 20)
         return True  # exit the menu
@@ -529,11 +537,28 @@ class KEYPAD:
                     self.countdown_to_turn_off_screen = NRML_SCREEN_TIMEOUT
                 color = (0, 255, 0)
                 title = "OK"
-            if not warmed:
+            try:
+                throttle_warnings = self.device.get_throttled_status()
+            except Exception:
+                throttle_warnings = []
+            if warmed:
+                if throttle_warnings:
+                    if title == "OK":
+                        title = throttle_warnings[0]
+                        color = (255, 128, 0)
+                    else:
+                        self.menu[5][0]["display"] = True
+                        self.menu[5][0]["text"] = throttle_warnings[0]
+                        self.menu[5][0]["action"] = lambda: None
+            else:
                 # data unreliable
-                title = "WEPN "
                 self.menu[5][1]["display"] = False
-                color = (255, 255, 255)
+                if throttle_warnings:
+                    title = throttle_warnings[0]
+                    color = (255, 128, 0)
+                else:
+                    title = "WEPN "
+                    color = (255, 255, 255)
 
             self.set_current_menu(5)
             self.titles[5]["color"] = color

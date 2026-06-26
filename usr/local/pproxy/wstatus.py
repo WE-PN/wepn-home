@@ -11,6 +11,27 @@ except ImportError:
 STATUS_FILE = '/var/local/pproxy/status.ini'
 
 
+def write_ini_atomic(file_path, cfg):
+    dir_ = os.path.dirname(file_path) or '.'
+    fd, tmp_path = tempfile.mkstemp(dir=dir_)
+    try:
+        with os.fdopen(fd, 'w') as f:
+            cfg.write(f)
+        os.chmod(tmp_path, 0o640)
+        try:
+            gid = grp.getgrnam('shadow-runners').gr_gid
+            os.chown(tmp_path, -1, gid)
+        except (KeyError, OSError):
+            pass
+        os.replace(tmp_path, file_path)
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+
+
 class WStatus:
     def __init__(self, logger, source_file=None):
         self.status = configparser.ConfigParser()
@@ -37,22 +58,8 @@ class WStatus:
         if self.source_file is not None and self.status is not None:
             self.logger.info(f"writing status file {self.source_file}")
             try:
-                dir_ = os.path.dirname(self.source_file) or '.'
-                fd, tmp_path = tempfile.mkstemp(dir=dir_)
-                try:
-                    with os.fdopen(fd, 'w') as f:
-                        self.status.write(f)
-                    os.chmod(tmp_path, 0o640)
-                    try:
-                        gid = grp.getgrnam('shadow-runners').gr_gid
-                        os.chown(tmp_path, -1, gid)
-                    except (KeyError, OSError):
-                        pass
-                    os.replace(tmp_path, self.source_file)
-                    self.orig_hash = new_hash
-                except Exception:
-                    os.unlink(tmp_path)
-                    raise
+                write_ini_atomic(self.source_file, self.status)
+                self.orig_hash = new_hash
             except Exception as err:
                 self.logger.debug(
                     "Something happened when writing status file:" + self.source_file
@@ -95,25 +102,32 @@ class WStatus:
             self.logger.exception("Unknown field: " + field)
             return ""
 
+    def _parse_field(self, ret):
+        if "[" in ret and "]" in ret:
+            res = ret.strip('][\'\"').split(', ')
+        else:
+            res = ret
+        if isinstance(res, list):
+            return res[0]
+        elif isinstance(res, str):
+            return res.replace('%%', '%')
+        else:
+            return ret
+
     def get_field(self, section, field):
         try:
-            res = ""
-            ret = self.status.get(section, field)
-            if "[" in ret and "]" in ret:
-                res = ret.strip('][\'\"').split(', ')
-            else:
-                res = ret
-            if isinstance(res, list):
-                return res[0]
-            elif isinstance(res, str):
-                return res.replace('%%', '%')
-            else:
-                return ret
+            return self._parse_field(self.status.get(section, field))
         except:
-            self.logger.exception("Unknown section/field: "
+            self.logger.warning("Unknown section/field: "
+                                + section + ":" + field
+                                + " in " + self.source_file + ", reloading")
+            self.reload()
+        try:
+            return self._parse_field(self.status.get(section, field))
+        except:
+            self.logger.exception("Unknown section/field after reload: "
                                   + section + ":" + field +
                                   " in " + self.source_file)
-            self.reload()
             return ""
 
     def set_service_status(self, service_name, is_enabled):

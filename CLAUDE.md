@@ -92,6 +92,7 @@ If developing on a real WEPN Pod (dev device), LED and physical buttons are avai
 - `dev` is the main working branch — all daily development happens here.
 - `master` is for tagged releases only.
 - Feature branches should PR into `dev`, not `master`.
+- **Releases to `master` must go through a pull request from `dev` — never force-push directly to `master`.** Tag the release commit after the PR is merged.
 
 ## Build & Deploy
 

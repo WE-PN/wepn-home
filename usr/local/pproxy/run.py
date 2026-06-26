@@ -21,6 +21,7 @@ except ImportError:
 
 from constants import LOG_CONFIG
 from constants import HEARTBEATS_TO_WARM
+from wstatus import write_ini_atomic
 
 CONFIG_FILE = '/etc/pproxy/config.ini'
 CONFIG_FILE_BACKUP = '/var/local/pproxy/config.bak'
@@ -77,8 +78,7 @@ status['status']['hb_to_warm'] = str(HEARTBEATS_TO_WARM)
 # if the device was powered down for a long time
 timestamp = int(round(datetime.now().timestamp()))
 status['status']['last_measurement_send_timestamp'] = str(timestamp)
-with open(STATUS_FILE, 'w') as statusfile:
-    status.write(statusfile)
+write_ini_atomic(STATUS_FILE, status)
 
 device = Device(logger)
 gateway_vendor = device.get_default_gw_vendor()
@@ -133,16 +133,14 @@ if 1 == int(status.get('status', 'claimed')):
         status['status']['claimed'] = '0'
         status['status']['mqtt'] = '0'
         status['status']['state'] = '3'
-        with open(STATUS_FILE, 'w') as statusfile:
-            status.write(statusfile)
+        write_ini_atomic(STATUS_FILE, status)
         # reboot to go into onboarding
         device.reboot()
 
     while True:
         try:
             status['status']['booting'] = '0'
-            with open(STATUS_FILE, 'w') as statusfile:
-                status.write(statusfile)
+            write_ini_atomic(STATUS_FILE, status)
             PPROXY_PROCESS = PProxy()
             PPROXY_PROCESS.start()
         except Exception:
@@ -159,8 +157,7 @@ else:
     while True:
         try:
             status['status']['booting'] = '0'
-            with open(STATUS_FILE, 'w') as statusfile:
-                status.write(statusfile)
+            write_ini_atomic(STATUS_FILE, status)
             ONBOARD = OnBoard()
             if is_claimed:
                 for name, key in status.items("previous_keys"):

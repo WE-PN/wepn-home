@@ -2,6 +2,7 @@ import pytest
 import sys
 import os
 import json
+import requests  # ensure urllib3/backports are in sys.modules before os.stat is mocked
 from unittest.mock import MagicMock, patch, mock_open
 
 
@@ -20,6 +21,7 @@ def base_mocks():
             patch('requests.post') as m_post, \
             patch('time.sleep'), \
             patch('datetime.datetime') as m_dt, \
+            patch.dict('sys.modules', {'wstatus': MagicMock()}), \
             patch('builtins.open', mock_open()) as m_open:
 
         m_stat.return_value.st_size = 100

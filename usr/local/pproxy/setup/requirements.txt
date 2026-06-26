@@ -27,6 +27,7 @@ urllib3==2.7.0
 RPi.GPIO==0.7.1
 pad4pi==1.1.5
 gpiozero==2.0
+lgpio==0.2.2.0
 
 # --- Hardware: display (lcd.py) ---
 Pillow==12.2.0
@@ -41,6 +42,7 @@ adafruit-circuitpython-busdevice==5.2.6
 
 # --- Hardware: NeoPixel LEDs (system_services/led_manager.py) ---
 adafruit-circuitpython-neopixel==6.3.10
+rpi-ws281x==5.0.0
 
 # --- System / device info (device.py, system_services/metrics.py) ---
 psutil==5.9.6
@@ -55,3 +57,4 @@ maxminddb==2.7.0
 # --- Utilities ---
 sanitize-filename==1.2.0
 python-dateutil==2.8.2
+python-json-logger==2.0.7
