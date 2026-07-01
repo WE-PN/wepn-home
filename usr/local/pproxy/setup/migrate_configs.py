@@ -59,7 +59,10 @@ data = {
 try:
     response = requests.patch(url, data=json.dumps(data), headers=headers, timeout=10)
     updated_config = json.loads(response.text)
-    updated_version = updated_config["config"]["config_version"]
-    services.save_server_config_version(updated_version)
-except requests.exceptions.RequestException as e:
+    updated_version = updated_config.get("config", {}).get("config_version")
+    if updated_version:
+        services.save_server_config_version(updated_version)
+    else:
+        logger.error("Unexpected response from server during config migration: " + response.text)
+except (requests.exceptions.RequestException, json.JSONDecodeError, ValueError) as e:
     logger.error("Error sending config to server: " + str(e))
