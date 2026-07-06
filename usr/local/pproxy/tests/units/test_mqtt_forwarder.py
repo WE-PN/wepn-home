@@ -121,6 +121,22 @@ class TestMQTTForwarder(unittest.TestCase):
                             self._mqtt_msg(b'{"action": "start_service"}'))
         self.fwd.logger.warning.assert_called()
 
+    def _logged_text(self):
+        parts = []
+        for _, args, _ in self.fwd.logger.method_calls:
+            parts.extend(str(a) for a in args)
+        return " ".join(parts)
+
+    def test_malformed_payload_not_logged(self):
+        # regression guard: message content must never reach error.log
+        self.fwd.on_message(None, None,
+                            self._mqtt_msg(b'{"link":"SENSITIVE-VALUE'))
+        self.assertNotIn('SENSITIVE-VALUE', self._logged_text())
+
+    def test_non_object_payload_content_not_logged(self):
+        self.fwd.on_message(None, None, self._mqtt_msg(b'"SENSITIVE-VALUE"'))
+        self.assertNotIn('SENSITIVE-VALUE', self._logged_text())
+
 
 if __name__ == '__main__':
     unittest.main()

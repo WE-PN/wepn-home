@@ -239,6 +239,14 @@ class TestPProxy(unittest.TestCase):
         self.assertEqual(ack, {'status': 'discarded'})
         self.assertTrue(self.pp.queue.empty())
 
+    def test_on_channel_message_invalid_payload_content_not_logged(self):
+        # regression guard: payload content must not reach the (prod-written) log
+        self.pp.on_channel_message('mqtt', {'secret': 'SENSITIVE-VALUE'})
+        logged = []
+        for _, args, _ in self.logger.method_calls:
+            logged.extend(str(a) for a in args)
+        self.assertNotIn('SENSITIVE-VALUE', " ".join(logged))
+
     def test_on_channel_message_non_dict_payload_discarded(self):
         ack = self.pp.on_channel_message('mqtt', "just a string")
         self.assertEqual(ack, {'status': 'discarded'})

@@ -80,14 +80,19 @@ class MQTTForwarder():
         self.channel.send_state(0, rc)
 
     def on_message(self, client, userdata, msg):
-        self.logger.debug("on_message: " + msg.topic + " " + str(msg.payload))
+        # never log the payload: message bodies can carry access links, cert
+        # names and emails, and the log lands in error.log which is readable by
+        # the wepn-api group. log only non-sensitive metadata.
+        self.logger.debug("received mqtt message on " + str(msg.topic))
         try:
             data = json.loads(msg.payload)
         except (ValueError, TypeError, UnicodeDecodeError):
-            self.logger.exception("dropping malformed payload: " + str(msg.payload))
+            self.logger.error("dropping malformed mqtt payload (%d bytes)"
+                              % len(msg.payload or b""))
             return
         if not isinstance(data, dict):
-            self.logger.error("dropping non-object payload: " + str(data))
+            self.logger.error("dropping non-object mqtt payload of type "
+                              + type(data).__name__)
             return
         ack = self.channel.send_msg(data, timeout=SEND_TIMEOUT_SECONDS)
         if ack is None:
