@@ -6,16 +6,14 @@ from os.path import basename
 from threading import Lock, Thread
 import atexit
 import base64
-import json
 import logging.config
 import os
-import paho.mqtt.client as mqtt
+import queue
 import random
 import re
 import shlex
 import signal
 import smtplib
-import ssl
 import sys
 import time
 import zlib
@@ -39,6 +37,7 @@ from ipw import IPW
 from lcd import LCD as LCD
 from led_client import LEDClient
 from messages import Messages
+from msg_channel import ChannelServer
 from services import Services
 from wstatus import WStatus
 
@@ -51,6 +50,13 @@ KEYPAD = [
 ]
 CONFIG_FILE = '/etc/pproxy/config.ini'
 STATUS_FILE = '/var/local/pproxy/status.ini'
+# actions that can take a long time (cert generation, email, per-friend
+# work on an ip change) and are safe to overlap with fast commands; they
+# run on their own single worker so a burst cannot block urgent actions
+# like reboot_device. deliberately NOT here: update-pproxy/update-all/
+# install-package (must not overlap code being replaced) and terminal
+# actions (reboot_device, wipe_device), which jump the burst by design.
+SLOW_ACTIONS = frozenset(["add_user", "delete_user"])
 logging.config.fileConfig(LOG_CONFIG,
                           disable_existing_loggers=False)
 
@@ -63,8 +69,9 @@ class PProxy():
         self.config.read(CONFIG_FILE)
         self.mqtt_connected = 0
         self.mqtt_reason = 0
-        self.mqtt_pending_notifications = []
-        self.rest_not_pending_mqtt = []
+        self.queue = queue.Queue()
+        self.slow_queue = queue.Queue()
+        self.channel = None
         self.loggers = {}
         if logger is not None:
             self.logger = logger
@@ -99,6 +106,8 @@ class PProxy():
 
     def cleanup(self):
         self.logger.debug("PProxy shutting down.")
+        if self.channel is not None:
+            self.channel.stop()
         self.leds.blank()
         if self.lcd is not None:
             try:
@@ -205,25 +214,65 @@ class PProxy():
             self.lcd.display(display_str, 20)
             self.device.turn_off()
 
-    def get_messages(self):
-        self.logger.debug("getting messages")
-
-        # loop through the message array, process them one by one.
-        for message in self.messages.get_messages():
-            id = int(message["id"])
-            self.logger.info("message ID processing: " + str(id))
-            if id in self.mqtt_pending_notifications:
-                self.mqtt_pending_notifications.remove(id)
-            else:
-                self.logger.info("REST arrived earlier than MQTT")
-                self.rest_not_pending_mqtt.append(id)
-            self.logger.info(self.mqtt_pending_notifications)
-            self.logger.info(self.rest_not_pending_mqtt)
-            th = Thread(target=self.on_message_handler, args=(
-                message["message_body"], self.mqtt_lock))
+    def on_channel_message(self, source, payload):
+        # called by the channel server for every 'msg' frame a producer sends;
+        # the returned status goes back in the ack (producers mark a backend
+        # message as read once it is accepted here)
+        if not isinstance(payload, dict) or 'action' not in payload:
+            self.logger.error("discarding invalid payload from "
+                              + str(source) + ": " + str(payload))
+            return {"status": "discarded"}
+        if payload['action'] == 'notification':
+            # the command body lives on the messaging API; nudge the poller
+            # to fetch it now instead of waiting for its next cycle
+            th = Thread(target=self.trigger_fetch)
             th.start()
-            self.messages.mark_msg_read(id)
-            self.logger.info("message ID processed: " + str(id))
+            return {"status": "queued"}
+        self.queue.put((source, payload))
+        return {"status": "queued"}
+
+    def trigger_fetch(self):
+        try:
+            ack = self.channel.send_cmd("poller", {"cmd": "fetch-now"})
+            if ack is None:
+                self.logger.warning("poller not reachable for fetch-now, "
+                                    "it will fetch on its next cycle")
+        except Exception:
+            self.logger.exception("failed to trigger message fetch")
+
+    def dispatch_loop(self):
+        # fast lane: one consumer, strict arrival order. known-slow actions
+        # are handed to the slow worker so a burst of per-friend work cannot
+        # block urgent commands; each lane stays FIFO but a fast action may
+        # overtake an earlier slow one (see docs/message-channel.md)
+        self.logger.info("message dispatcher started")
+        while True:
+            source, payload = self.queue.get()
+            try:
+                if payload.get('action') in SLOW_ACTIONS:
+                    self.slow_queue.put((source, payload))
+                    self.logger.debug("routed to slow lane, depth: "
+                                      + str(self.slow_queue.qsize()))
+                else:
+                    self.on_message_handler(payload, self.mqtt_lock)
+            except Exception:
+                self.logger.exception("error handling message from " + str(source))
+            finally:
+                self.queue.task_done()
+
+    def slow_dispatch_loop(self):
+        # slow lane: one worker, so slow actions stay strictly ordered among
+        # themselves (e.g. add_user then delete_user for the same friend)
+        self.logger.info("slow-action dispatcher started")
+        while True:
+            source, payload = self.slow_queue.get()
+            try:
+                self.on_message_handler(payload, self.mqtt_lock)
+            except Exception:
+                self.logger.exception("error handling slow message from "
+                                      + str(source))
+            finally:
+                self.slow_queue.task_done()
 
     def send_mail(self, send_from, send_to,
                   subject, text, html, files_in,
@@ -311,29 +360,26 @@ class PProxy():
         except Exception as error_exception:
             self.logger.error("failed to send mail: " + str(error_exception))
 
-    # The callback for when the client receives a CONNACK response from the server.
-    # if save_state takes too long, MQTT will disconnect so keep this function fast
-    # and not blocking too long
-    def on_connect(self, client, userdata, flags, reason_code, properties=None):
-        self.logger.info("Connected with result code " + str(reason_code))
-        self.mqtt_connected = 1
-        self.mqtt_reason = reason_code
-
-        # Subscribing in on_connect() means that if we lose the connection and
-        # reconnect then subscriptions will be renewed.
-        # client.subscribe("$SYS/#")
-        topic = "devices/" + self.config.get('mqtt', 'username') + "/#"
-        self.logger.info('subscribing to: ' + topic)
-        client.subscribe(topic, qos=1)
-        self.logger.info('connected to service MQTT, saving state')
-        self.leds.blink(color=(0, 255, 0), wait=500, repetitions=1)
-        self.leds.blank()
-        # if device has too many friends,
-        # sending heartbeat might take too long and make MQTT fail
-        # hence the False parameter for hb_send
-        # self.save_state("2", 1, False)
-        th = Thread(target=self.save_state, args=("2",))
-        th.start()
+    # called by the channel server when a producer reports its link state
+    # (today: the MQTT forwarder reporting broker connectivity)
+    def on_channel_state(self, source, connected, reason):
+        self.logger.info("channel state from " + str(source) + ": connected="
+                         + str(connected) + " reason=" + str(reason))
+        self.mqtt_connected = connected
+        self.mqtt_reason = reason
+        if connected:
+            self.leds.blink(color=(0, 255, 0), wait=500, repetitions=1)
+            self.leds.blank()
+            # if device has too many friends, sending the heartbeat inside
+            # save_state might take a while, so keep this callback fast
+            th = Thread(target=self.save_state, args=("2",))
+            th.start()
+        else:
+            # show solid yellow ring indicating MQTT has been
+            # disconnected from server
+            self.leds.pulse(color=(255, 255, 0),
+                            wait=50,
+                            repetitions=50)
 
     # prevent directory traversal attacks by checking final path
 
@@ -345,23 +391,9 @@ class PProxy():
         else:
             return None
 
-    # The callback for when a PUBLISH message is received from the server.
-    def on_message(self, client, userdata, msg):
-        self.logger.debug("on_message: " + msg.topic + " " + str(msg.payload))
-        try:
-            data = json.loads(msg.payload)
-        except BaseException:
-            self.logger.exception("message was:" + msg + " + payload: " + msg.payload)
-            data = json.loads(msg.payload.decode("utf-8"))
-            self.logger.exception("on_message: except")
-        th = Thread(target=self.on_message_handler, args=(data, self.mqtt_lock))
-        th.start()
-        self.logger.debug("after starting the thread for on_message")
-
     def on_message_handler(self, data, lock):
-        # TODO: need to add a new class Message, and then add this handler there.
-        # challenge is that there are too many glabal variables here, need some clean up
-        # ideally also have a separate thread that has a queue and handles messages in order.
+        # runs on the dispatch_loop thread, one message at a time, in the
+        # order the producers delivered them
         services = Services(self.loggers['services'])
         unsubscribe_link = None
         send_email = True
@@ -587,34 +619,6 @@ class PProxy():
             self.save_state("3")
             # reboot to go into onboarding
             self.device.reboot()
-        elif (data['action'] == 'notification'):
-            # get with serial and dev key from https://api.we-pn.com/api/message/
-            # gives list of all messages for this device
-            id = data["message_id"]
-            if id not in self.rest_not_pending_mqtt:
-                self.mqtt_pending_notifications.append(data["message_id"])
-                self.logger.info("MQTT arrived earlier than REST")
-            else:
-                self.rest_not_pending_mqtt.remove(id)
-                self.logger.info("REST arrived earlier than MQTT")
-            self.get_messages()
-
-    # callback for diconnection of MQTT from server
-
-    def on_disconnect(self, client, userdata, reason_code):
-        self.logger.info("MQTT disconnected")
-        # show solid yellow ring indicating MQTT has been
-        # disconnected from server
-        self.leds.pulse(color=(255, 255, 0),
-                        wait=50,
-                        repetitions=50)
-        self.mqtt_connected = 0
-        self.mqtt_reason = reason_code
-        with self.mqtt_lock:
-            self.status.reload()
-            self.status.set('mqtt', 0)
-            self.status.set('mqtt-reason', reason_code)
-            self.status.save()
 
     def fetch_config(self, services):
         try:
@@ -637,8 +641,6 @@ class PProxy():
         time.sleep(1)
         services.start()
         time.sleep(5)
-        client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1,
-                             self.config.get('mqtt', 'username'), clean_session=False)
         self.logger.debug('HW config: button=' + str(int(self.config.get('hw', 'buttons'))) + '  LCD=' +
                           self.config.get('hw', 'lcd'))
         if (int(self.config.get('hw', 'buttons')) == 1 and
@@ -651,32 +653,18 @@ class PProxy():
                 self.logger.critical("setting up keypad failed: " + str(er))
                 if gpio_up:
                     GPIO.cleanup()
-        client.on_connect = self.on_connect
-        client.on_message = self.on_message
-        client.on_disconnect = self.on_disconnect
-        client.tls_set("/etc/ssl/certs/ISRG_Root_X1.pem",
-                       tls_version=ssl.PROTOCOL_TLSv1_2)
-        client.username_pw_set(username=self.config.get('mqtt', 'username'),
-                               password=self.config.get('mqtt', 'password'))
-        self.logger.debug("mqtt host: " + str(self.config.get('mqtt', 'host')))
+        self.channel = ChannelServer(on_message=self.on_channel_message,
+                                     on_state=self.on_channel_state,
+                                     logger=self.logger)
+        self.channel.start()
         try:
-            client.connect(str(self.config.get('mqtt', 'host')),
-                           int(self.config.get('mqtt', 'port')),
-                           int(self.config.get('mqtt', 'timeout')))
             heart_beat = HeartBeat(self.loggers["heartbeat"])
             heart_beat.send_heartbeat()
-
         except Exception as error:
-            self.logger.error("MQTT connect failed: " + str(error))
-            self.lcd.long_text("Connection to server disrupted, please check cable.")
-            if (int(self.config.get('hw', 'buttons')) == 1) and \
-                    (int(self.config.get('hw', 'button-version')) == 1):
-                keypad.cleanup()
-                if gpio_up:
-                    GPIO.cleanup()
-            raise
-        # Blocking call that processes network traffic, dispatches callbacks and
-        # handles reconnecting.
-        client.loop_forever()
-        if (int(self.config.get('hw', 'buttons'))):
-            keypad.cleanup()
+            # producers keep feeding the queue even if the backend is
+            # unreachable right now; the periodic heartbeat cron catches up
+            self.logger.error("initial heartbeat failed: " + str(error))
+        slow_worker = Thread(target=self.slow_dispatch_loop, daemon=True)
+        slow_worker.start()
+        # Blocking call: consumes producer messages in order until shutdown.
+        self.dispatch_loop()

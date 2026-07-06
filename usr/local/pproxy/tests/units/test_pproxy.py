@@ -1,4 +1,3 @@
-import json
 import unittest
 from unittest.mock import MagicMock, mock_open, patch
 
@@ -174,38 +173,146 @@ class TestPProxy(unittest.TestCase):
         mock_svc.return_value.start.assert_not_called()
         mock_svc.return_value.stop.assert_not_called()
 
-    # --- on_connect ---
+    # --- on_channel_state ---
 
-    def test_on_connect_sets_mqtt_connected(self):
-        with patch('pproxy.Thread'):
-            self.pp.on_connect(MagicMock(), None, None, 0)
-        self.assertEqual(self.pp.mqtt_connected, 1)
-
-    def test_on_connect_subscribes_to_device_topic(self):
-        mock_client = MagicMock()
-        self.pp.config.get = MagicMock(return_value='testuser')
-        with patch('pproxy.Thread'):
-            self.pp.on_connect(mock_client, None, None, 0)
-        mock_client.subscribe.assert_called_once_with('devices/testuser/#', qos=1)
-
-    # --- on_disconnect ---
-
-    def test_on_disconnect_clears_mqtt_connected(self):
-        self.pp.on_disconnect(MagicMock(), None, 5)
-        self.assertEqual(self.pp.mqtt_connected, 0)
-        self.assertEqual(self.pp.mqtt_reason, 5)
-        self.pp.status.set.assert_any_call('mqtt', 0)
-
-    # --- on_message ---
-
-    def test_on_message_spawns_thread_for_valid_json(self):
-        msg = MagicMock()
-        msg.topic = 'devices/test/1'
-        msg.payload = json.dumps({'action': 'reboot_device'}).encode()
+    def test_on_channel_state_connected_sets_attrs_and_saves_state(self):
         with patch('pproxy.Thread') as mock_thread:
-            self.pp.on_message(None, None, msg)
+            self.pp.on_channel_state('mqtt', 1, 0)
+        self.assertEqual(self.pp.mqtt_connected, 1)
+        self.assertEqual(self.pp.mqtt_reason, 0)
         mock_thread.assert_called_once()
         mock_thread.return_value.start.assert_called_once()
+
+    def test_on_channel_state_disconnected_pulses_leds(self):
+        self.pp.on_channel_state('mqtt', 0, 5)
+        self.assertEqual(self.pp.mqtt_connected, 0)
+        self.assertEqual(self.pp.mqtt_reason, 5)
+        self.pp.leds.pulse.assert_called_once()
+
+    # --- on_channel_message ---
+
+    def test_on_channel_message_enqueues_valid_payload(self):
+        ack = self.pp.on_channel_message('mqtt', {'action': 'reboot_device'})
+        self.assertEqual(ack, {'status': 'queued'})
+        source, payload = self.pp.queue.get_nowait()
+        self.assertEqual(source, 'mqtt')
+        self.assertEqual(payload['action'], 'reboot_device')
+
+    def test_on_channel_message_notification_triggers_fetch_not_enqueued(self):
+        with patch('pproxy.Thread') as mock_thread:
+            ack = self.pp.on_channel_message(
+                'mqtt', {'action': 'notification', 'message_id': 42})
+        self.assertEqual(ack, {'status': 'queued'})
+        self.assertTrue(self.pp.queue.empty())
+        mock_thread.assert_called_once_with(target=self.pp.trigger_fetch)
+        mock_thread.return_value.start.assert_called_once()
+
+    def test_on_channel_message_invalid_payload_discarded(self):
+        ack = self.pp.on_channel_message('mqtt', {'not_an_action': 1})
+        self.assertEqual(ack, {'status': 'discarded'})
+        self.assertTrue(self.pp.queue.empty())
+
+    def test_on_channel_message_non_dict_payload_discarded(self):
+        ack = self.pp.on_channel_message('mqtt', "just a string")
+        self.assertEqual(ack, {'status': 'discarded'})
+        self.assertTrue(self.pp.queue.empty())
+
+    def test_trigger_fetch_sends_cmd_to_poller(self):
+        self.pp.channel = MagicMock()
+        self.pp.trigger_fetch()
+        self.pp.channel.send_cmd.assert_called_once_with(
+            'poller', {'cmd': 'fetch-now'})
+
+    def test_trigger_fetch_survives_channel_error(self):
+        self.pp.channel = MagicMock()
+        self.pp.channel.send_cmd.side_effect = Exception('poller gone')
+        self.pp.trigger_fetch()  # must not raise
+        self.logger.exception.assert_called()
+
+    # --- dispatch_loop ---
+
+    def test_dispatch_loop_feeds_handler_in_order(self):
+        calls = []
+
+        def handler(data, lock):
+            calls.append(data['action'])
+            if data['action'] == 'last':
+                raise SystemExit()
+
+        self.pp.queue.put(('mqtt', {'action': 'first'}))
+        self.pp.queue.put(('poller', {'action': 'last'}))
+        with patch.object(self.pp, 'on_message_handler', side_effect=handler):
+            with self.assertRaises(SystemExit):
+                self.pp.dispatch_loop()
+        self.assertEqual(calls, ['first', 'last'])
+
+    def test_dispatch_loop_continues_after_handler_exception(self):
+        calls = []
+
+        def handler(data, lock):
+            calls.append(data['action'])
+            if data['action'] == 'boom':
+                raise ValueError('handler failed')
+            raise SystemExit()
+
+        self.pp.queue.put(('mqtt', {'action': 'boom'}))
+        self.pp.queue.put(('mqtt', {'action': 'last'}))
+        with patch.object(self.pp, 'on_message_handler', side_effect=handler):
+            with self.assertRaises(SystemExit):
+                self.pp.dispatch_loop()
+        self.assertEqual(calls, ['boom', 'last'])
+
+    def test_dispatch_loop_routes_slow_actions_to_slow_lane(self):
+        def handler(data, lock):
+            raise SystemExit()
+
+        self.pp.queue.put(('mqtt', {'action': 'add_user', 'cert_name': 'u1'}))
+        self.pp.queue.put(('mqtt', {'action': 'reboot_device'}))
+        with patch.object(self.pp, 'on_message_handler',
+                          side_effect=handler) as mock_handler:
+            with self.assertRaises(SystemExit):
+                self.pp.dispatch_loop()
+        # add_user went to the slow lane, only reboot was handled inline
+        mock_handler.assert_called_once()
+        self.assertEqual(mock_handler.call_args[0][0]['action'],
+                         'reboot_device')
+        source, payload = self.pp.slow_queue.get_nowait()
+        self.assertEqual(payload['action'], 'add_user')
+
+    def test_slow_dispatch_loop_feeds_handler_in_order(self):
+        calls = []
+
+        def handler(data, lock):
+            calls.append((data['action'], data['cert_name']))
+            if data['action'] == 'delete_user':
+                raise SystemExit()
+
+        self.pp.slow_queue.put(('mqtt', {'action': 'add_user',
+                                         'cert_name': 'u1'}))
+        self.pp.slow_queue.put(('mqtt', {'action': 'delete_user',
+                                         'cert_name': 'u1'}))
+        with patch.object(self.pp, 'on_message_handler', side_effect=handler):
+            with self.assertRaises(SystemExit):
+                self.pp.slow_dispatch_loop()
+        self.assertEqual(calls, [('add_user', 'u1'), ('delete_user', 'u1')])
+
+    def test_slow_dispatch_loop_continues_after_handler_exception(self):
+        calls = []
+
+        def handler(data, lock):
+            calls.append(data['cert_name'])
+            if data['cert_name'] == 'boom':
+                raise ValueError('handler failed')
+            raise SystemExit()
+
+        self.pp.slow_queue.put(('mqtt', {'action': 'add_user',
+                                         'cert_name': 'boom'}))
+        self.pp.slow_queue.put(('mqtt', {'action': 'add_user',
+                                         'cert_name': 'ok'}))
+        with patch.object(self.pp, 'on_message_handler', side_effect=handler):
+            with self.assertRaises(SystemExit):
+                self.pp.slow_dispatch_loop()
+        self.assertEqual(calls, ['boom', 'ok'])
 
     # --- on_message_handler ---
 
@@ -246,14 +353,6 @@ class TestPProxy(unittest.TestCase):
             self.pp.on_message_handler({'action': 'wipe_device'}, MagicMock())
         self.pp.device.reboot.assert_called_once()
 
-    def test_on_message_handler_notification_triggers_get_messages(self):
-        self.pp.rest_not_pending_mqtt = []
-        with patch.object(self.pp, 'get_messages') as mock_get, \
-             patch('pproxy.Services'):
-            self.pp.on_message_handler({'action': 'notification', 'message_id': 42},
-                                       MagicMock())
-        mock_get.assert_called_once()
-
     def test_on_message_handler_update_pproxy(self):
         with patch('pproxy.Services'):
             self.pp.on_message_handler({'action': 'update-pproxy'}, MagicMock())
@@ -280,46 +379,6 @@ class TestPProxy(unittest.TestCase):
         with patch('pproxy.smtplib.SMTP') as mock_smtp:
             self.pp.send_mail('from@t', 'to@t', 'sub', 'body', '', [])
         mock_smtp.assert_not_called()
-
-    # --- get_messages ---
-
-    def test_get_messages_spawns_thread_per_message(self):
-        self.pp.messages.get_messages.return_value = [
-            {'id': 1, 'message_body': {}},
-            {'id': 2, 'message_body': {}},
-        ]
-        with patch('pproxy.Thread') as mock_thread:
-            self.pp.get_messages()
-        self.assertEqual(mock_thread.call_count, 2)
-        self.pp.messages.mark_msg_read.assert_any_call(1)
-        self.pp.messages.mark_msg_read.assert_any_call(2)
-
-    def test_get_messages_mqtt_arrived_first_removes_from_pending(self):
-        self.pp.mqtt_pending_notifications = [42]
-        self.pp.messages.get_messages.return_value = [{'id': 42, 'message_body': {}}]
-        with patch('pproxy.Thread'):
-            self.pp.get_messages()
-        self.assertNotIn(42, self.pp.mqtt_pending_notifications)
-
-    def test_get_messages_rest_arrived_first_adds_to_list(self):
-        self.pp.mqtt_pending_notifications = []
-        self.pp.rest_not_pending_mqtt = []
-        self.pp.messages.get_messages.return_value = [{'id': 99, 'message_body': {}}]
-        with patch('pproxy.Thread'):
-            self.pp.get_messages()
-        self.assertIn(99, self.pp.rest_not_pending_mqtt)
-
-    # --- on_message bad JSON ---
-
-    def test_on_message_bad_json_logs_exception(self):
-        msg = MagicMock()
-        msg.topic = 'devices/test/1'
-        msg.payload = b'not valid json'
-        with patch('pproxy.Thread') as mock_thread:
-            with self.assertRaises(Exception):
-                self.pp.on_message(None, None, msg)
-        self.logger.exception.assert_called()
-        mock_thread.assert_not_called()
 
     # --- on_message_handler add_user ---
 
