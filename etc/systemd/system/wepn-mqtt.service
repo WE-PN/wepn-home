@@ -1,0 +1,18 @@
+[Unit]
+Description=WEPN MQTT Forwarder Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=pproxy
+ExecStart=/var/local/pproxy/wepn-env/bin/python3 /usr/local/pproxy/system_services/mqtt_forwarder.py
+KillMode=control-group
+Restart=on-failure
+RestartPreventExitStatus=255
+Type=simple
+RuntimeDirectory=pproxy/
+WorkingDirectory=/usr/local/pproxy/
+RuntimeDirectoryMode=0755
+
+[Install]
+WantedBy=multi-user.target
