@@ -28,6 +28,15 @@ SEND_TIMEOUT_SECONDS = 2
 logging.config.fileConfig(LOG_CONFIG, disable_existing_loggers=False)
 
 
+def rc_to_int(reason_code):
+    # paho v2 callbacks pass ReasonCode objects; status.ini and state
+    # frames carry plain ints
+    try:
+        return int(getattr(reason_code, "value", reason_code))
+    except (TypeError, ValueError):
+        return 0
+
+
 class MQTTForwarder():
     """Owns the broker connection; forwards every command payload to the
     main pproxy process over the local message channel."""
@@ -59,13 +68,16 @@ class MQTTForwarder():
         topic = "devices/" + self.config.get('mqtt', 'username') + "/#"
         self.logger.info('subscribing to: ' + topic)
         client.subscribe(topic, qos=1)
-        self.set_mqtt_status(1, reason_code)
-        self.channel.send_state(1, int(reason_code))
+        rc = rc_to_int(reason_code)
+        self.set_mqtt_status(1, rc)
+        self.channel.send_state(1, rc)
 
-    def on_disconnect(self, client, userdata, reason_code):
+    def on_disconnect(self, client, userdata, disconnect_flags,
+                      reason_code, properties=None):
         self.logger.info("MQTT disconnected")
-        self.set_mqtt_status(0, reason_code)
-        self.channel.send_state(0, int(reason_code))
+        rc = rc_to_int(reason_code)
+        self.set_mqtt_status(0, rc)
+        self.channel.send_state(0, rc)
 
     def on_message(self, client, userdata, msg):
         self.logger.debug("on_message: " + msg.topic + " " + str(msg.payload))
@@ -82,7 +94,7 @@ class MQTTForwarder():
             self.logger.warning("main process not reachable, payload buffered for replay")
 
     def build_client(self):
-        client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1,
+        client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2,
                              self.config.get('mqtt', 'username'), clean_session=False)
         client.on_connect = self.on_connect
         client.on_message = self.on_message

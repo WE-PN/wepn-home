@@ -186,7 +186,8 @@ class OnBoard():
             lcd.display(display_str, 20)
             self.device.turn_off()
 
-    def on_disconnect(self, client, userdata, reason_code):
+    def on_disconnect(self, client, userdata, disconnect_flags,
+                      reason_code, properties=None):
         self.logger.debug(">>>MQTT disconnected")
         self.disconnect_count += 1
         sleep_delay = 60
@@ -256,7 +257,7 @@ class OnBoard():
             self.save_temp_key(new_key=self.rand_e2e_key,
                                section_name="prev_e2e_key",
                                temp_key_name="temp_e2e_key")
-        self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1,
+        self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2,
                                   self.config.get('mqtt', 'username'), clean_session=True)
         # TODO: to log this effectively for error logs,
         # instead of actual key save a hash of it to the log file.
