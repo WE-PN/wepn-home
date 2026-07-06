@@ -233,7 +233,12 @@ class ChannelServer:
                 status = "queued"
                 if isinstance(result, dict) and "status" in result:
                     status = result["status"]
-                conn.send(_new_frame("ack", id=frame_id, status=status))
+                if status == "busy":
+                    # overload: not accepted, tell the producer to retry so it
+                    # does not treat this as delivered (no ack)
+                    conn.send(_new_frame("error", id=frame_id, reason="busy"))
+                else:
+                    conn.send(_new_frame("ack", id=frame_id, status=status))
             except Exception:
                 self.logger.exception("on_message callback failed")
                 conn.send(_new_frame("error", id=frame_id, reason="handler failed"))
@@ -423,7 +428,10 @@ class ChannelClient:
         finally:
             with self.pending_lock:
                 self.pending_acks.pop(frame["id"], None)
-            if not replay and pending["response"] is None:
+            # replay=False sources redeliver on their own (the backend keeps
+            # unacked messages unread), so never retain their frames for replay
+            # regardless of ack, error, or timeout
+            if not replay:
                 with self.unacked_lock:
                     try:
                         self.unacked.remove(frame)

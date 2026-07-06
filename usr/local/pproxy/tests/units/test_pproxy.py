@@ -198,6 +198,33 @@ class TestPProxy(unittest.TestCase):
         self.assertEqual(source, 'mqtt')
         self.assertEqual(payload['action'], 'reboot_device')
 
+    def test_on_channel_message_routes_slow_action_to_slow_lane(self):
+        ack = self.pp.on_channel_message('poller',
+                                         {'action': 'add_user', 'cert_name': 'u1'})
+        self.assertEqual(ack, {'status': 'queued'})
+        self.assertTrue(self.pp.queue.empty())
+        source, payload = self.pp.slow_queue.get_nowait()
+        self.assertEqual(payload['action'], 'add_user')
+
+    def test_on_channel_message_rejects_when_fast_queue_full(self):
+        while True:
+            try:
+                self.pp.queue.put_nowait(('x', {'action': 'reboot_device'}))
+            except Exception:
+                break
+        ack = self.pp.on_channel_message('mqtt', {'action': 'reboot_device'})
+        self.assertEqual(ack, {'status': 'busy'})
+
+    def test_on_channel_message_rejects_when_slow_queue_full(self):
+        while True:
+            try:
+                self.pp.slow_queue.put_nowait(('x', {'action': 'add_user'}))
+            except Exception:
+                break
+        ack = self.pp.on_channel_message('poller',
+                                         {'action': 'add_user', 'cert_name': 'u'})
+        self.assertEqual(ack, {'status': 'busy'})
+
     def test_on_channel_message_notification_triggers_fetch_not_enqueued(self):
         with patch('pproxy.Thread') as mock_thread:
             ack = self.pp.on_channel_message(
@@ -261,23 +288,6 @@ class TestPProxy(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 self.pp.dispatch_loop()
         self.assertEqual(calls, ['boom', 'last'])
-
-    def test_dispatch_loop_routes_slow_actions_to_slow_lane(self):
-        def handler(data, lock):
-            raise SystemExit()
-
-        self.pp.queue.put(('mqtt', {'action': 'add_user', 'cert_name': 'u1'}))
-        self.pp.queue.put(('mqtt', {'action': 'reboot_device'}))
-        with patch.object(self.pp, 'on_message_handler',
-                          side_effect=handler) as mock_handler:
-            with self.assertRaises(SystemExit):
-                self.pp.dispatch_loop()
-        # add_user went to the slow lane, only reboot was handled inline
-        mock_handler.assert_called_once()
-        self.assertEqual(mock_handler.call_args[0][0]['action'],
-                         'reboot_device')
-        source, payload = self.pp.slow_queue.get_nowait()
-        self.assertEqual(payload['action'], 'add_user')
 
     def test_slow_dispatch_loop_feeds_handler_in_order(self):
         calls = []

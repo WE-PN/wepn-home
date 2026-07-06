@@ -41,7 +41,7 @@ from msg_channel import ChannelServer
 from services import Services
 from wstatus import WStatus
 
-from constants import LOG_CONFIG
+from constants import LOG_CONFIG, MSG_CHANNEL_QUEUE_MAX
 
 COL_PINS = [26]  # BCM numbering
 ROW_PINS = [19, 13, 6]  # BCM numbering
@@ -69,8 +69,9 @@ class PProxy():
         self.config.read(CONFIG_FILE)
         self.mqtt_connected = 0
         self.mqtt_reason = 0
-        self.queue = queue.Queue()
-        self.slow_queue = queue.Queue()
+        # bounded so a flood cannot exhaust memory; reject-on-full sheds load
+        self.queue = queue.Queue(maxsize=MSG_CHANNEL_QUEUE_MAX)
+        self.slow_queue = queue.Queue(maxsize=MSG_CHANNEL_QUEUE_MAX)
         self.channel = None
         self.loggers = {}
         if logger is not None:
@@ -215,20 +216,29 @@ class PProxy():
             self.device.turn_off()
 
     def on_channel_message(self, source, payload):
-        # called by the channel server for every 'msg' frame a producer sends;
-        # the returned status goes back in the ack (producers mark a backend
-        # message as read once it is accepted here)
+        # called by the channel server for every 'msg' frame a producer sends.
+        # returned status drives the ack: "queued"/"discarded" -> producer may
+        # mark the backend message read; "busy" -> server sends an error frame
+        # so the producer retries later (nothing is lost under overload).
         if not isinstance(payload, dict) or 'action' not in payload:
-            self.logger.error("discarding invalid payload from "
-                              + str(source) + ": " + str(payload))
+            self.logger.error("discarding invalid payload from " + str(source))
             return {"status": "discarded"}
-        if payload['action'] == 'notification':
+        action = payload['action']
+        if action == 'notification':
             # the command body lives on the messaging API; nudge the poller
             # to fetch it now instead of waiting for its next cycle
             th = Thread(target=self.trigger_fetch)
             th.start()
             return {"status": "queued"}
-        self.queue.put((source, payload))
+        # classify here so each lane is bounded independently and a full lane
+        # is rejected before we ack (routing in the dispatcher could not).
+        target = self.slow_queue if action in SLOW_ACTIONS else self.queue
+        try:
+            target.put_nowait((source, payload))
+        except queue.Full:
+            self.logger.warning("dispatch queue full, rejecting message from "
+                                + str(source))
+            return {"status": "busy"}
         return {"status": "queued"}
 
     def trigger_fetch(self):
@@ -241,20 +251,16 @@ class PProxy():
             self.logger.exception("failed to trigger message fetch")
 
     def dispatch_loop(self):
-        # fast lane: one consumer, strict arrival order. known-slow actions
-        # are handed to the slow worker so a burst of per-friend work cannot
-        # block urgent commands; each lane stays FIFO but a fast action may
-        # overtake an earlier slow one (see docs/message-channel.md)
+        # fast lane: one consumer, strict arrival order. slow actions are
+        # classified onto the slow lane at intake (on_channel_message) so a
+        # burst of per-friend work cannot block urgent commands here; each lane
+        # stays FIFO but a fast action may overtake an earlier slow one
+        # (see docs/message-channel.md)
         self.logger.info("message dispatcher started")
         while True:
             source, payload = self.queue.get()
             try:
-                if payload.get('action') in SLOW_ACTIONS:
-                    self.slow_queue.put((source, payload))
-                    self.logger.debug("routed to slow lane, depth: "
-                                      + str(self.slow_queue.qsize()))
-                else:
-                    self.on_message_handler(payload, self.mqtt_lock)
+                self.on_message_handler(payload, self.mqtt_lock)
             except Exception:
                 self.logger.exception("error handling message from " + str(source))
             finally:
