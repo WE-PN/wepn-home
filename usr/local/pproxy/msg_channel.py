@@ -8,7 +8,10 @@ import time
 import uuid
 from collections import deque
 
-from constants import (MSG_CHANNEL_MAX_FRAME,
+from constants import (MSG_CHANNEL_HANDSHAKE_TIMEOUT,
+                       MSG_CHANNEL_IDLE_TIMEOUT,
+                       MSG_CHANNEL_MAX_CONNECTIONS,
+                       MSG_CHANNEL_MAX_FRAME,
                        MSG_CHANNEL_PROTOCOL_VERSION,
                        MSG_CHANNEL_SOCKET)
 
@@ -97,7 +100,10 @@ class ChannelServer:
 
     def __init__(self, on_message, on_state=None,
                  socket_path=MSG_CHANNEL_SOCKET,
-                 allowed_uids=None, logger=None):
+                 allowed_uids=None, logger=None,
+                 handshake_timeout=MSG_CHANNEL_HANDSHAKE_TIMEOUT,
+                 idle_timeout=MSG_CHANNEL_IDLE_TIMEOUT,
+                 max_connections=MSG_CHANNEL_MAX_CONNECTIONS):
         self.on_message = on_message
         self.on_state = on_state
         self.socket_path = socket_path
@@ -105,6 +111,11 @@ class ChannelServer:
             allowed_uids = {os.getuid(), 0}
         self.allowed_uids = set(allowed_uids)
         self.logger = logger or logging.getLogger("msg_channel")
+        self.handshake_timeout = handshake_timeout
+        self.idle_timeout = idle_timeout
+        # bound concurrent connections/reader threads so a peer that opens many
+        # sockets (or many silent ones) cannot exhaust threads/FDs
+        self.conn_slots = threading.Semaphore(max_connections)
         self.server_sock = None
         self.clients = {}  # role -> _Connection
         self.clients_lock = threading.Lock()
@@ -176,6 +187,11 @@ class ChannelServer:
             if not allowed:
                 sock.close()
                 continue
+            if not self.conn_slots.acquire(blocking=False):
+                self.logger.error("connection cap reached, rejecting peer pid "
+                                  + str(pid))
+                sock.close()
+                continue
             conn = _Connection(sock, peer_pid=pid)
             reader = threading.Thread(target=self._serve_connection, args=(conn,),
                                       name="channel-reader", daemon=True)
@@ -183,11 +199,18 @@ class ChannelServer:
 
     def _serve_connection(self, conn):
         try:
+            # a peer must authenticate quickly; a silent one is not allowed to
+            # hold a reader thread indefinitely
+            conn.sock.settimeout(self.handshake_timeout)
             if not self._handshake(conn):
                 return
+            # steady state: reads time out only if the peer stops its keepalive
+            conn.sock.settimeout(self.idle_timeout)
             while self.running:
                 frame = read_frame(conn.sock)
                 self._handle_frame(conn, frame)
+        except socket.timeout:
+            self.logger.info("connection timed out: role=" + str(conn.role))
         except (ChannelClosed, OSError):
             self.logger.info("connection closed: role=" + str(conn.role))
         except Exception:
@@ -195,6 +218,7 @@ class ChannelServer:
         finally:
             self._unregister(conn)
             conn.close()
+            self.conn_slots.release()
 
     def _handshake(self, conn):
         frame = read_frame(conn.sock)

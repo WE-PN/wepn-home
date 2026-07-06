@@ -206,6 +206,45 @@ class TestServerClient(unittest.TestCase):
         mode = os.stat(self.socket_path).st_mode
         self.assertEqual(mode & 0o777, 0o660)
 
+    def test_connection_cap_rejects_excess(self):
+        self.server.stop()
+        self.server = self._make_server(max_connections=1)
+        self.server.start()
+        client = self._make_client(role='a')
+        self.assertTrue(client.connected.wait(5))
+        self.assertTrue(wait_until(lambda: 'a' in self.server.clients))
+        # a second connection has no slot; server accepts then closes it
+        raw = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.addCleanup(raw.close)
+        raw.connect(self.socket_path)
+        raw.settimeout(3)
+        self.assertEqual(raw.recv(16), b'')
+
+    def test_handshake_timeout_closes_silent_peer(self):
+        self.server.stop()
+        self.server = self._make_server(handshake_timeout=0.5)
+        self.server.start()
+        raw = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.addCleanup(raw.close)
+        raw.connect(self.socket_path)
+        raw.settimeout(3)
+        # never send hello; the server must close us after handshake_timeout
+        self.assertEqual(raw.recv(16), b'')
+
+    def test_idle_read_timeout_closes_stalled_peer(self):
+        self.server.stop()
+        self.server = self._make_server(handshake_timeout=2, idle_timeout=0.5)
+        self.server.start()
+        raw = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.addCleanup(raw.close)
+        raw.connect(self.socket_path)
+        raw.settimeout(3)
+        raw.sendall(pack_frame({'v': 1, 'type': 'hello', 'id': 'x',
+                                'role': 'stall'}))
+        self.assertEqual(read_frame(raw).get('type'), 'hello-ack')
+        # then go silent past idle_timeout; server closes us
+        self.assertEqual(raw.recv(16), b'')
+
 
 if __name__ == '__main__':
     unittest.main()
