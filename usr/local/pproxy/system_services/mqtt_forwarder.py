@@ -64,11 +64,15 @@ class MQTTForwarder():
 
     def on_connect(self, client, userdata, flags, reason_code, properties=None):
         self.logger.info("Connected with result code " + str(reason_code))
+        rc = rc_to_int(reason_code)
+        if rc != 0:
+            self.set_mqtt_status(0, rc)
+            self.channel.send_state(0, rc)
+            return
         # subscribing in on_connect() means subscriptions are renewed on reconnect
         topic = "devices/" + self.config.get('mqtt', 'username') + "/#"
         self.logger.info('subscribing to: ' + topic)
         client.subscribe(topic, qos=1)
-        rc = rc_to_int(reason_code)
         self.set_mqtt_status(1, rc)
         self.channel.send_state(1, rc)
 

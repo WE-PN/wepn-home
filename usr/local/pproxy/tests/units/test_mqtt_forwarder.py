@@ -65,6 +65,14 @@ class TestMQTTForwarder(unittest.TestCase):
         self.fwd.status.set.assert_any_call('mqtt', 1)
         self.fwd.channel.send_state.assert_called_once_with(1, 0)
 
+    def test_on_connect_failure_does_not_subscribe_or_report_connected(self):
+        client = MagicMock()
+        self.fwd.on_connect(client, None, None, 135)
+        client.subscribe.assert_not_called()
+        self.fwd.status.set.assert_any_call('mqtt', 0)
+        self.fwd.status.set.assert_any_call('mqtt-reason', 135)
+        self.fwd.channel.send_state.assert_called_once_with(0, 135)
+
     def test_on_disconnect_reports_down(self):
         self.fwd.on_disconnect(MagicMock(), None, None, 5)
         self.fwd.status.set.assert_any_call('mqtt', 0)
