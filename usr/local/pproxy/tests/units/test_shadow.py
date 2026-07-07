@@ -203,6 +203,26 @@ class TestShadow(unittest.TestCase):
                     'user1', '1.1.1.1', 'en')
         self.assertIn('shortlink', txt)
 
+    @patch('shadow.Shadow.get_short_link_text', return_value='shortlink')
+    def test_get_add_email_text_new_user_gets_welcome_text(self, mock_short):
+        with patch('shadow.Shadow.is_enabled', return_value=True):
+            with patch('shadow.Shadow.can_email', return_value=True):
+                txt, html, manuals, subject = self.shadow_service.get_add_email_text(
+                    'user1', '1.1.1.1', 'en', is_new_user=True)
+        self.assertIn('You have been granted access', txt)
+        self.assertIn('You have been granted access', html)
+        self.assertEqual(subject, "Your New VPN Access Details")
+
+    @patch('shadow.Shadow.get_short_link_text', return_value='shortlink')
+    def test_get_add_email_text_existing_user_gets_update_text(self, mock_short):
+        with patch('shadow.Shadow.is_enabled', return_value=True):
+            with patch('shadow.Shadow.can_email', return_value=True):
+                txt, html, manuals, subject = self.shadow_service.get_add_email_text(
+                    'user1', '1.1.1.1', 'en', is_new_user=False)
+        self.assertIn('access link to the private VPN server is updated', txt)
+        self.assertIn('access link to the private VPN server is updated', html)
+        self.assertEqual(subject, "Update to  Your VPN Access Details")
+
     def test_get_removal_email_text(self):
         with patch('shadow.Shadow.is_enabled', return_value=True):
             with patch('shadow.Shadow.can_email', return_value=True):

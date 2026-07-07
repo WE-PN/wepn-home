@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import MagicMock, mock_open, patch
 
+from constants import NOTIFY_EMAIL_COOLDOWN_SECONDS, NOTIFY_PUSH_COOLDOWN_SECONDS
 from pproxy import PProxy
 
 
@@ -36,6 +37,7 @@ class TestPProxy(unittest.TestCase):
         self.patcher_device = patch('pproxy.Device')
         self.patcher_messages = patch('pproxy.Messages')
         self.patcher_atexit = patch('pproxy.atexit.register')
+        self.patcher_notify = patch('pproxy.NotificationLimiter')
 
         self.mock_cp = self.patcher_cp.start()
         self.mock_leds_cls = self.patcher_leds.start()
@@ -43,9 +45,12 @@ class TestPProxy(unittest.TestCase):
         self.mock_device_cls = self.patcher_device.start()
         self.mock_messages_cls = self.patcher_messages.start()
         self.patcher_atexit.start()
+        self.mock_notify_cls = self.patcher_notify.start()
+        self.mock_notify_cls.return_value.allow.return_value = True
 
         for p in (self.patcher_cp, self.patcher_leds, self.patcher_wstatus,
-                  self.patcher_device, self.patcher_messages, self.patcher_atexit):
+                  self.patcher_device, self.patcher_messages, self.patcher_atexit,
+                  self.patcher_notify):
             self.addCleanup(p.stop)
 
         cfg_map = _make_config()
@@ -366,6 +371,20 @@ class TestPProxy(unittest.TestCase):
             self.pp.on_message_handler(data, MagicMock())
         mock_svc.return_value.delete_user.assert_called_once()
 
+    def test_on_message_handler_delete_user_limiter_denies_blocks_notifications(self):
+        data = {'action': 'delete_user', 'cert_name': 'user1', 'email': 'friend@test'}
+        self.pp.notify_limiter.allow.return_value = False
+        with patch('pproxy.Services') as mock_svc, \
+             patch.object(self.pp, 'get_server_public_address', return_value='1.2.3.4'), \
+             patch.object(self.pp, 'send_mail') as mock_send_mail:
+            self.pp.on_message_handler(data, MagicMock())
+        mock_svc.return_value.delete_user.assert_called_once()
+        mock_send_mail.assert_not_called()
+        self.pp.messages.send_msg.assert_not_called()
+        call = self.pp.notify_limiter.allow.call_args_list[-1]
+        self.assertEqual(call.args[0], 'user_deleted_msg')
+        self.assertEqual(call.args[2], NOTIFY_PUSH_COOLDOWN_SECONDS)
+
     def test_on_message_handler_wipe_reboots(self):
         with patch('pproxy.HeartBeat'):
             self.pp.on_message_handler({'action': 'wipe_device'}, MagicMock())
@@ -417,6 +436,81 @@ class TestPProxy(unittest.TestCase):
              patch.object(self.pp, 'get_server_public_address', return_value='1.2.3.4'):
             mock_svc.return_value.add_user.side_effect = Exception('add failed')
             self.pp.on_message_handler(data, mock_lock)
+
+    # --- on_message_handler add_user notification gating ---
+
+    def test_on_message_handler_add_user_new_user_bypasses_cooldown(self):
+        data = {'action': 'add_user', 'cert_name': 'u1', 'language': 'en',
+                'email': 'friend@test', 'passcode': 'phrase'}
+        mock_lock = MagicMock()
+        with patch('pproxy.Services') as mock_svc, \
+             patch.object(self.pp, 'get_server_public_address', return_value='1.2.3.4'), \
+             patch.object(self.pp, 'send_mail'):
+            mock_svc.return_value.add_user.return_value = True  # new user
+            mock_svc.return_value.get_add_email_text.return_value = ('body', '<p>body</p>', [], 'subj')
+            mock_svc.return_value.get_short_link_text.return_value = 'shortlink'
+            self.pp.on_message_handler(data, mock_lock)
+        email_call = self.pp.notify_limiter.allow.call_args_list[0]
+        self.assertEqual(email_call.args[0], 'add_email')
+        self.assertEqual(email_call.args[2], 0)
+        self.assertIsNone(email_call.args[3])
+        push_call = self.pp.notify_limiter.allow.call_args_list[1]
+        self.assertEqual(push_call.args[0], 'user_added_msg')
+        self.assertEqual(push_call.args[2], 0)
+        self.assertIsNone(push_call.args[3])
+
+    def test_on_message_handler_add_user_existing_user_uses_cooldown_and_token(self):
+        data = {'action': 'add_user', 'cert_name': 'u1', 'language': 'en',
+                'email': 'friend@test', 'passcode': 'phrase'}
+        mock_lock = MagicMock()
+        with patch('pproxy.Services') as mock_svc, \
+             patch('pproxy.ipw') as mock_ipw, \
+             patch.object(self.pp, 'get_server_public_address', return_value='1.2.3.4'), \
+             patch.object(self.pp, 'send_mail'):
+            mock_ipw.myip.return_value = '9.9.9.9'
+            mock_svc.return_value.add_user.return_value = False  # existing user
+            mock_svc.return_value.get_add_email_text.return_value = ('body', '<p>body</p>', [], 'subj')
+            mock_svc.return_value.get_short_link_text.return_value = 'shortlink'
+            self.pp.on_message_handler(data, mock_lock)
+        email_call = self.pp.notify_limiter.allow.call_args_list[0]
+        self.assertEqual(email_call.args[0], 'add_email')
+        self.assertEqual(email_call.args[2], NOTIFY_EMAIL_COOLDOWN_SECONDS)
+        self.assertEqual(email_call.args[3], '1.2.3.4')
+
+    def test_on_message_handler_add_user_limiter_denies_blocks_notifications(self):
+        data = {'action': 'add_user', 'cert_name': 'u1', 'language': 'en',
+                'email': 'friend@test', 'passcode': 'phrase'}
+        mock_lock = MagicMock()
+        self.pp.notify_limiter.allow.return_value = False
+        with patch('pproxy.Services') as mock_svc, \
+             patch('pproxy.ipw') as mock_ipw, \
+             patch.object(self.pp, 'get_server_public_address', return_value='1.2.3.4'), \
+             patch.object(self.pp, 'send_mail') as mock_send_mail:
+            mock_ipw.myip.return_value = '9.9.9.9'
+            mock_svc.return_value.add_user.return_value = False  # existing user -> ip change path
+            mock_svc.return_value.get_add_email_text.return_value = ('body', '<p>body</p>', [], 'subj')
+            mock_svc.return_value.get_short_link_text.return_value = 'shortlink'
+            self.pp.on_message_handler(data, mock_lock)
+        mock_svc.return_value.add_user.assert_called_once()
+        self.pp.device.update_dns.assert_called_once()
+        mock_send_mail.assert_not_called()
+        self.pp.messages.send_msg.assert_not_called()
+
+    def test_on_message_handler_add_user_limiter_allows_sends_mail(self):
+        data = {'action': 'add_user', 'cert_name': 'u1', 'language': 'en',
+                'email': 'friend@test', 'passcode': 'phrase'}
+        mock_lock = MagicMock()
+        with patch('pproxy.Services') as mock_svc, \
+             patch.object(self.pp, 'get_server_public_address', return_value='1.2.3.4'), \
+             patch.object(self.pp, 'send_mail') as mock_send_mail:
+            mock_svc.return_value.add_user.return_value = True
+            mock_svc.return_value.get_add_email_text.return_value = ('body', '<p>body</p>', [], 'subj')
+            mock_svc.return_value.get_short_link_text.return_value = 'shortlink'
+            self.pp.on_message_handler(data, mock_lock)
+        mock_send_mail.assert_called_once()
+        _, kwargs = mock_send_mail.call_args
+        self.assertEqual(kwargs['send_to'], 'friend@test')
+        self.assertEqual(kwargs['subject'], 'subj')
         mock_lock.release.assert_called_once()
 
     # --- on_message_handler set_ddns ---

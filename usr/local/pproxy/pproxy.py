@@ -38,10 +38,17 @@ from lcd import LCD as LCD
 from led_client import LEDClient
 from messages import Messages
 from msg_channel import ChannelServer
+from notify_limiter import NotificationLimiter
 from services import Services
 from wstatus import WStatus
 
-from constants import LOG_CONFIG, MSG_CHANNEL_QUEUE_MAX
+from constants import (
+    LOG_CONFIG,
+    MSG_CHANNEL_QUEUE_MAX,
+    NOTIFY_EMAIL_COOLDOWN_SECONDS,
+    NOTIFY_PUSH_COOLDOWN_SECONDS,
+    NOTIFY_RESPONSE_COOLDOWN_SECONDS,
+)
 
 COL_PINS = [26]  # BCM numbering
 ROW_PINS = [19, 13, 6]  # BCM numbering
@@ -99,6 +106,7 @@ class PProxy():
         atexit.register(self.cleanup)
         signal.signal(signal.SIGTERM, lambda signum, frame: sys.exit(0))
         self.status = WStatus(self.loggers['wstatus'])
+        self.notify_limiter = NotificationLimiter(self.logger, self.status)
         self.device = Device(self.loggers['device'])
         self.mqtt_lock = Lock()
         self.lcd = None
@@ -127,6 +135,15 @@ class PProxy():
 
     def sanitize_str(self, str_in):
         return (shlex.quote(str_in))
+
+    def get_response_cooldown(self):
+        if self.config.has_section('notify') and self.config.has_option(
+                'notify', 'response-cooldown'):
+            try:
+                return int(self.config.get('notify', 'response-cooldown'))
+            except ValueError:
+                pass
+        return NOTIFY_RESPONSE_COOLDOWN_SECONDS
 
     def get_server_public_address(self):
         ip_address = self.sanitize_str(ipw.myip())
@@ -423,7 +440,9 @@ class PProxy():
             short_link = services.get_short_link_text(cname,
                                                       self.get_server_public_address(),
                                                       self.get_tunnel_from_data(data))
-            if short_link != "" and self.messages.e2ee_available():
+            if short_link != "" and self.messages.e2ee_available() and \
+                    self.notify_limiter.allow("response_access_link", cname,
+                                              self.get_response_cooldown()):
                 self.messages.send_msg(short_link, cert_id=cname, secure=True,
                                        msg_type="response-access-link")
         elif (data['action'] == 'get-error-log'):
@@ -432,8 +451,10 @@ class PProxy():
             contents_bytes = err_log.encode('utf-8')
             compressed = zlib.compress(contents_bytes)
             c_base = base64.b64encode(compressed).decode('utf-8')
-            self.messages.send_msg(c_base, cert_id=cname, secure=True,
-                                   msg_type="response-error-logs")
+            if self.notify_limiter.allow("response_error_logs", cname,
+                                         self.get_response_cooldown()):
+                self.messages.send_msg(c_base, cert_id=cname, secure=True,
+                                       msg_type="response-error-logs")
         elif (data['action'] == 'show-e2ee-qrcode'):
             # This is useful for cases where the pod and the phone are somehow not able
             # to sync using local API, for example and isolated network.
@@ -449,6 +470,7 @@ class PProxy():
             self.lcd.display(display_str, 19)
         elif (data['action'] == 'add_user'):
             txt = None
+            is_new_user = True
             try:
                 self.logger.debug("before lock acquired")
                 # light up ring LEDs in blue with fill pattern
@@ -504,10 +526,14 @@ class PProxy():
                                     repetitions=6)
                     send_email = False
 
+                notify_token = None if is_new_user else server_address
                 if txt is not None:
                     self.logger.debug("add_user: " + txt)
                     self.logger.debug("send_email?" + str(send_email))
-                    if send_email:
+                    email_cooldown = 0 if is_new_user else NOTIFY_EMAIL_COOLDOWN_SECONDS
+                    if send_email and self.notify_limiter.allow(
+                            "add_email", data['email'] + "|" + username,
+                            email_cooldown, notify_token):
                         self.send_mail(send_from=self.config.get('email', 'email'),
                                        send_to=data['email'],
                                        subject=subject,
@@ -519,7 +545,10 @@ class PProxy():
                                        unsubscribe_link=unsubscribe_link)
                 # alse send a message to the app via Messaging API
                 short_link = services.get_short_link_text(username, server_address, tunnel)
-                if short_link != "" and self.messages.e2ee_available():
+                push_cooldown = 0 if is_new_user else NOTIFY_PUSH_COOLDOWN_SECONDS
+                if short_link != "" and self.messages.e2ee_available() and \
+                        self.notify_limiter.allow("user_added_msg", username,
+                                                  push_cooldown, notify_token):
                     self.messages.send_msg(short_link, cert_id=username,
                                            secure=True, msg_type="user_added")
 
@@ -552,7 +581,9 @@ class PProxy():
                 self.leds.blink(color=(255, 0, 0),
                                 wait=50,
                                 repetitions=5)
-            if send_email and 'email' in data.keys() and data['email'] is not None:
+            if send_email and 'email' in data.keys() and data['email'] is not None and \
+                    self.notify_limiter.allow("delete_email", data['email'] + "|" + username,
+                                              NOTIFY_EMAIL_COOLDOWN_SECONDS):
                 self.send_mail(send_from=self.config.get('email', 'email'),
                                send_to=data['email'],
                                subject="Your VPN details",
@@ -564,8 +595,9 @@ class PProxy():
                                files_in=None,
                                unsubscribe_link=None)  # at this point, friend is removed from backend db
             # alse send a message to the app via Messaging API
-            self.messages.send_msg("deleted user " + str(username) + " from " +
-                                   str(server_address), cert_id=username, secure=False, msg_type="user_deleted")
+            if self.notify_limiter.allow("user_deleted_msg", username, NOTIFY_PUSH_COOLDOWN_SECONDS):
+                self.messages.send_msg("deleted user " + str(username) + " from " +
+                                       str(server_address), cert_id=username, secure=False, msg_type="user_deleted")
         elif (data['action'] == 'reboot_device'):
             self.save_state("3")
             self.device.reboot()
