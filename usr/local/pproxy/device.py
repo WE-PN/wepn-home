@@ -46,6 +46,18 @@ CONFIG_FILE = '/etc/pproxy/config.ini'
 PORT_STATUS_FILE = '/var/local/pproxy/port.ini'
 MAX_UPDATE_RETRIES = 5
 
+# vcgencmd get_throttled rarely changes; avoid spawning the setuid
+# helper on every screen refresh (keypad.py polls this every 30s).
+# Poll slowly under normal conditions; once a throttle condition is
+# seen, switch to the fast interval so recovery is noticed promptly.
+THROTTLE_CACHE_SECONDS_NORMAL = 300
+THROTTLE_CACHE_SECONDS_ACTIVE = 30
+# bits 0-3 of `vcgencmd get_throttled`: currently-active conditions
+# (under-voltage, arm freq capped, throttled, soft temp limit).
+# Bits 16-19 are the sticky "has happened since boot" versions and
+# are intentionally excluded here.
+THROTTLE_ACTIVE_MASK = 0xF
+
 
 # setuid command runner
 SRUN = "/usr/local/sbin/wepn-run"
@@ -82,6 +94,9 @@ class Device():
         self.iface = str(self.config.get('hw', 'iface'))
         self.repo_pkg_version = None
         self.reached_repo = False
+        self._throttled_raw_cache = None
+        self._throttled_raw_cache_time = 0
+        self._throttled_active = False
         atexit.register(self.cleanup)
 
     def find_igds(self):
@@ -1064,15 +1079,30 @@ class Device():
         return contents
 
     def get_throttled_raw(self):
+        now = time.time()
+        cache_ttl = (THROTTLE_CACHE_SECONDS_ACTIVE if self._throttled_active
+                     else THROTTLE_CACHE_SECONDS_NORMAL)
+        if now - self._throttled_raw_cache_time < cache_ttl:
+            return self._throttled_raw_cache
         try:
             out, err, _, _ = self.execute_cmd_output(SRUN + " 1 31")
             text = out.decode('utf-8', errors='replace').strip() if isinstance(out, bytes) else str(out).strip()
-            if '=' in text:
-                return text.split('=', 1)[1].strip()
-            return None
+            result = text.split('=', 1)[1].strip() if '=' in text else None
         except Exception as e:
             self.logger.warning("get_throttled_raw: " + str(e))
-            return None
+            result = None
+        self._throttled_raw_cache = result
+        self._throttled_raw_cache_time = now
+        self._throttled_active = self._is_throttle_active(result)
+        return result
+
+    def _is_throttle_active(self, raw):
+        if not raw:
+            return False
+        try:
+            return bool(int(raw, 0) & THROTTLE_ACTIVE_MASK)
+        except ValueError:
+            return False
 
     def get_throttled_status(self):
         raw = self.get_throttled_raw()
