@@ -33,6 +33,9 @@ chown pproxy:pproxy /var/local/pproxy/.*
 chown pproxy:shadow-runners /var/local/pproxy/status.ini
 chmod 0640 /var/local/pproxy/status.ini
 chown pproxy:pproxy /var/local/pproxy/shadow/*
+# stale message-channel socket from before the reboot; wepn-main
+# recreates it with the correct permissions on startup
+rm -f /var/local/pproxy/msg_channel.sock
 
 echo -e "correcting scripts that run as sudo"
 SCRIPTS=()

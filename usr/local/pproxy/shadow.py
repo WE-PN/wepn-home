@@ -454,7 +454,7 @@ class Shadow(Service):
                 manuals = ['/usr/local/pproxy/ui/' + lang + '/outline.png',
                            '/usr/local/pproxy/ui/' + lang + '/potatso.png']
                 subject = "Your New VPN Access Details"
-                if not is_new_user:
+                if is_new_user:
                     txt = "You have been granted access to a private VPN server (" + str(
                         ip_address) + "). "
                     txt += 'This VPN server uses Shadowsocks server. To start using this service:'

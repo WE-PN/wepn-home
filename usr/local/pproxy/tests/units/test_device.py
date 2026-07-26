@@ -451,6 +451,56 @@ class TestCommands:
         assert device_instance.get_process_cmd_by_pid(123) == ["cmd"]
         assert device_instance.get_process_cmd_by_pid(999) == [""]
 
+    def test_get_throttled_raw_caches_result(self, device_instance):
+        with patch.object(device_instance, 'execute_cmd_output') as mock_exec:
+            mock_exec.return_value = (b'throttled=0x50000', b'', 0, None)
+            first = device_instance.get_throttled_raw()
+            second = device_instance.get_throttled_raw()
+            assert first == '0x50000'
+            assert second == '0x50000'
+            mock_exec.assert_called_once()
+
+    def test_get_throttled_raw_refreshes_after_cache_expiry(self, device_instance):
+        with patch.object(device_instance, 'execute_cmd_output') as mock_exec, \
+                patch('device.time.time') as mock_time:
+            mock_exec.return_value = (b'throttled=0x0', b'', 0, None)
+            mock_time.return_value = 1000
+            device_instance.get_throttled_raw()
+            mock_time.return_value = 1000 + device.THROTTLE_CACHE_SECONDS_NORMAL + 1
+            device_instance.get_throttled_raw()
+            assert mock_exec.call_count == 2
+
+    def test_get_throttled_raw_polls_faster_while_active(self, device_instance):
+        with patch.object(device_instance, 'execute_cmd_output') as mock_exec, \
+                patch('device.time.time') as mock_time:
+            # bit 2 (currently throttled) set
+            mock_exec.return_value = (b'throttled=0x4', b'', 0, None)
+            mock_time.return_value = 1000
+            device_instance.get_throttled_raw()
+
+            # short delay: still under the slow TTL, but past the fast one
+            mock_time.return_value = 1000 + device.THROTTLE_CACHE_SECONDS_ACTIVE + 1
+            device_instance.get_throttled_raw()
+            assert mock_exec.call_count == 2
+
+    def test_get_throttled_raw_reverts_to_slow_once_clear(self, device_instance):
+        with patch.object(device_instance, 'execute_cmd_output') as mock_exec, \
+                patch('device.time.time') as mock_time:
+            mock_exec.return_value = (b'throttled=0x4', b'', 0, None)
+            mock_time.return_value = 1000
+            device_instance.get_throttled_raw()
+
+            mock_time.return_value = 1000 + device.THROTTLE_CACHE_SECONDS_ACTIVE + 1
+            mock_exec.return_value = (b'throttled=0x0', b'', 0, None)
+            device_instance.get_throttled_raw()
+            assert mock_exec.call_count == 2
+
+            # back to normal: should now hold the slow TTL again
+            mock_time.return_value = (1000 + device.THROTTLE_CACHE_SECONDS_ACTIVE + 1
+                                      + device.THROTTLE_CACHE_SECONDS_ACTIVE + 1)
+            device_instance.get_throttled_raw()
+            assert mock_exec.call_count == 2
+
     def test_mount_operations(self, device_instance):
         with patch.object(device_instance, 'execute_cmd_output') as mock_exec, \
                 patch('device.time.sleep'):

@@ -936,8 +936,10 @@ def main():
         # this will refresh the home screen to show the new state (thumbs down/up).
         # challenge here is that if an error message is shown, this refresh should not overwrite it
         time.sleep(UNIT_TIMEOUT)
+        home_screen_shown = False
         if keypad.menu_index == 5:
             keypad.show_home_screen()
+            home_screen_shown = True
         else:
             # this allows showing LED error even with in different menu
             keypad.refresh_status(True)
@@ -947,7 +949,8 @@ def main():
         keypad.menu_active_countdown -= 1
         if keypad.menu_active_countdown == 0:
             # this part ensures we read status and update screen info
-            keypad.show_home_screen()
+            if not home_screen_shown:
+                keypad.show_home_screen()
             keypad.menu_active_countdown = MENU_TIMEOUT
         if keypad.screen_timed_out is False:
             keypad.countdown_to_turn_off_screen -= 1

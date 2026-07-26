@@ -320,12 +320,16 @@ systemctl enable wepn-api
 systemctl enable wepn-keypad
 systemctl enable wepn-leds
 systemctl enable wepn-main
+systemctl enable wepn-messages
 systemctl enable wepn-metrics
+systemctl enable wepn-mqtt
 systemctl start wepn-api
 systemctl start wepn-keypad
 systemctl start wepn-main
 systemctl start wepn-metrics
 systemctl start wepn-leds
+systemctl start wepn-mqtt
+systemctl start wepn-messages
 cd $PPROXY_HOME/setup/
 
 ##############################################################################
