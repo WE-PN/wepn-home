@@ -9,6 +9,7 @@ import datetime as datetime
 import distro
 import getopt
 import json
+import logging
 import netifaces
 import os
 import platform
@@ -22,6 +23,11 @@ import subprocess  # nosec shlex split used for sanitization go.we-pn.com/waiver
 import sys
 import time
 import upnpclient as upnp
+
+# upnpclient logs a hard-coded ERROR for any SSDP-announcing device whose
+# description XML fails to parse (e.g. Roku's ECP/DIAL SCPD quirk) - benign
+# LAN noise unrelated to our own port-forwarding logic.
+logging.getLogger("ssdp").setLevel(logging.CRITICAL)
 
 try:
     from configparser import configparser
