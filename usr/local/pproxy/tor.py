@@ -73,8 +73,10 @@ class Tor(Service):
     def start(self):
         device = Device(self.logger)
         self.start_all()
-        # add tor redirects for go.we-pn.com/wrong-location
-        device.execute_setuid("1 8", detached=True)
+        # rebuild routing rules for go.we-pn.com/wrong-location.
+        # 1 9 (prevent_location_issue.sh) self-flushes under its own flock; do
+        # not also fire the bare flush (1 8) detached, or it can race in after
+        # the rebuild and drop the Pod to direct routing.
         device.execute_setuid("1 9", detached=True)
         return
 

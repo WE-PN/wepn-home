@@ -5,6 +5,11 @@ from service import Service
 SRUN = "/usr/local/sbin/wepn-run"
 
 
+# networking.ini fields that change the iptables routing state; a change to any
+# of them triggers a rebuild via start().
+ROUTING_FIELDS = ('uplink', 'routing-mode', 'block-quic')
+
+
 class Networking(Service):
     def __init__(self, logger):
         Service.__init__(self, "networking", logger)
@@ -12,17 +17,20 @@ class Networking(Service):
 
     def start(self):
         device = Device(self.logger)
-        device.execute_setuid("1 8", detached=True)
+        # prevent_location_issue.sh (1 9) flushes and rebuilds the routing rules
+        # atomically under its own flock. Do NOT also fire the bare flush (1 8):
+        # the two are unordered when detached and the flush can land after the
+        # rebuild, leaving the Pod on direct routing.
         device.execute_setuid("1 9", detached=True)
         return
 
     def configure(self, str_conf):
         self.service_config.reload()
-        prev_uplink = self.service_config.get_field(self.name, 'uplink')
-        prev_mode = self.service_config.get_field(self.name, 'routing-mode')
+        prev = [self.service_config.get_field(self.name, f) for f in ROUTING_FIELDS]
         super().configure(str_conf)
-        new_uplink = self.service_config.get_field(self.name, 'uplink')
-        new_mode = self.service_config.get_field(self.name, 'routing-mode')
-        if new_uplink != prev_uplink or new_mode != prev_mode:
-            self.logger.info(f"networking config changed ({prev_uplink}/{prev_mode} -> {new_uplink}/{new_mode}), reapplying rules")
+        new = [self.service_config.get_field(self.name, f) for f in ROUTING_FIELDS]
+        if new != prev:
+            self.logger.info(
+                "networking config changed (%s -> %s), reapplying rules"
+                % (dict(zip(ROUTING_FIELDS, prev)), dict(zip(ROUTING_FIELDS, new))))
             self.start()
