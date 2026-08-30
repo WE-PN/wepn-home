@@ -168,13 +168,44 @@ class TestUPnP:
             with patch.object(device_instance, 'set_port_forward', return_value=True) as mock_spf:
                 result = device_instance.open_port(8080, "test")
                 assert result is True
-                mock_spf.assert_called_with("open", 8080, "test", 8080, device.DEFAULT_UPNP_TIMEOUT)
+                mock_spf.assert_called_with("open", 8080, "test", 8080, device.DEFAULT_UPNP_TIMEOUT,
+                                            protos=("TCP", "UDP"))
+
+    def test_open_port_tcp_only(self, device_instance):
+        with patch.object(device_instance, 'should_skip_upnp', return_value=False):
+            with patch.object(device_instance, 'set_port_forward', return_value=True) as mock_spf:
+                result = device_instance.open_port(8080, "test", timeout=300, protos=("TCP",))
+                assert result is True
+                mock_spf.assert_called_with("open", 8080, "test", 8080, 300, protos=("TCP",))
+
+    def test_open_port_retry_keeps_lease(self, device_instance):
+        # on SOAPError the retry must keep the requested lease first and
+        # only fall back to a permanent (0) lease if that also fails
+        device.upnp.soap.SOAPError = type('SOAPError', (Exception,), {})
+        with patch.object(device_instance, 'should_skip_upnp', return_value=False):
+            with patch.object(device_instance, 'set_port_forward') as mock_spf:
+                mock_spf.side_effect = [device.upnp.soap.SOAPError, True]
+                result = device_instance.open_port(8080, "test", timeout=300)
+                assert result is True
+                assert mock_spf.call_count == 2
+                mock_spf.assert_called_with("open", 8080, "test", 8080, 300,
+                                            retry=True, protos=("TCP", "UDP"))
+
+    def test_open_port_retry_falls_back_to_permanent(self, device_instance):
+        device.upnp.soap.SOAPError = type('SOAPError', (Exception,), {})
+        with patch.object(device_instance, 'should_skip_upnp', return_value=False):
+            with patch.object(device_instance, 'set_port_forward') as mock_spf:
+                mock_spf.side_effect = [device.upnp.soap.SOAPError, False, True]
+                result = device_instance.open_port(8080, "test", timeout=300)
+                assert result is True
+                mock_spf.assert_called_with("open", 8080, "test", 8080, 0,
+                                            retry=True, protos=("TCP", "UDP"))
 
     def test_close_port(self, device_instance):
         with patch.object(device_instance, 'should_skip_upnp', return_value=False):
             with patch.object(device_instance, 'set_port_forward') as mock_spf:
                 device_instance.close_port(8080)
-                mock_spf.assert_called_with("close", 8080, "")
+                mock_spf.assert_called_with("close", 8080, "", protos=("TCP", "UDP"))
 
     def test_check_igd_supports_portforward(self, device_instance):
         mock_igd = MagicMock()
@@ -195,6 +226,16 @@ class TestUPnP:
         with patch.object(device_instance, 'get_local_ip', return_value="1.2.3.4"):
             device_instance.set_port_forward("open", 8080, "test")
             assert mock_pm.AddPortMapping.call_count == 2
+
+    def test_set_port_forward_tcp_only(self, device_instance):
+        mock_pm = MagicMock()
+        mock_pm.AddPortMapping.return_value = True
+        device_instance.port_mappers = [mock_pm]
+        device_instance.igds = [MagicMock()]
+        with patch.object(device_instance, 'get_local_ip', return_value="1.2.3.4"):
+            device_instance.set_port_forward("open", 8080, "test", protos=("TCP",))
+            assert mock_pm.AddPortMapping.call_count == 1
+            assert mock_pm.AddPortMapping.call_args.kwargs["NewProtocol"] == "TCP"
 
     def test_set_port_forward_all_paths(self, device_instance):
         mock_pm = MagicMock()

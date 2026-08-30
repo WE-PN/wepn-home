@@ -212,6 +212,26 @@ def test_send_msg_plain(mock_post, messages_instance):
     assert data['message_body']['is_secure'] is False
 
 @patch('requests.post')
+def test_send_msg_extra_fields_merged(mock_post, messages_instance):
+    mock_response = MagicMock()
+    mock_response.status_code = 201
+    mock_post.return_value = mock_response
+
+    messages_instance.send_msg("", secure=False, msg_type="response-test-port",
+                               extra_fields={"port": 5013, "window_seconds": 180},
+                               expires_at=1788131748)
+
+    args, kwargs = mock_post.call_args
+    data = json.loads(kwargs['data'])
+    assert data['message_body']['port'] == 5013
+    assert data['message_body']['window_seconds'] == 180
+    assert data['message_body']['message_type'] == "response-test-port"
+    assert data['message_body']['is_secure'] is False
+    # expires_at is a property of the message record, not of message_body
+    assert data['expires_at'] == 1788131748
+    assert 'expires_at' not in data['message_body']
+
+@patch('requests.post')
 def test_send_msg_secure(mock_post, messages_instance):
     mock_response = MagicMock()
     mock_response.status_code = 201

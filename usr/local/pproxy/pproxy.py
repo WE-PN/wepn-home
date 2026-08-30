@@ -39,6 +39,7 @@ from led_client import LEDClient
 from messages import Messages
 from msg_channel import ChannelServer
 from notify_limiter import NotificationLimiter
+from port_probe import PortProbe
 from services import Services
 from wstatus import WStatus
 
@@ -111,6 +112,7 @@ class PProxy():
         self.mqtt_lock = Lock()
         self.lcd = None
         self.messages = Messages()
+        self.port_probe = PortProbe(self.logger, self.device, self.messages)
         return
 
     def cleanup(self):
@@ -468,6 +470,10 @@ class PProxy():
                 e2ee_key = "not-set"
             display_str = [(2, "wepn://e2ee_key=" + str(e2ee_key), 2, "white"), ]
             self.lcd.display(display_str, 19)
+        elif (data['action'] == 'open-test-port'):
+            # validation, single-session guard, and the 3-minute lifecycle
+            # all live in PortProbe; request() only spawns and returns
+            self.port_probe.request(data.get('port'))
         elif (data['action'] == 'add_user'):
             txt = None
             is_new_user = True

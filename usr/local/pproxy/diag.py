@@ -15,6 +15,9 @@ import time
 
 from constants import DEFAULT_GET_TIMEOUT as GET_TIMEOUT
 from constants import CONNECTIVITY_TEST_URLS as CONN_TEST_URLS
+from constants import (DIAG_LISTENER_DEADLINE_SECONDS,
+                       DIAG_LISTENER_ACCEPT_TIMEOUT_SECONDS)
+from port_probe import run_listener
 
 try:
     from configparser import configparser
@@ -45,11 +48,11 @@ class WPDiag:
         self.mqtt_reason = 0
         self.device = Device(logger)
         self.listener = None
-        self.shutdown_listener = False
+        self.listener_stop = threading.Event()
         atexit.register(self.cleanup)
 
     def cleanup(self):
-        self.shutdown_listener = True
+        self.listener_stop.set()
 
     def sanitize_str(self, str_in):
         return (shlex.quote(str_in))
@@ -64,35 +67,15 @@ class WPDiag:
             system.exit()
 
     def open_listener(self, host, port):
-        self.logger.debug("listener starting..." + str(port))
-        start = int(time.time())
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.settimeout(30)
-        try:
-            s.bind((host, int(port)))
-        except OSError as err:
-            self.logger.error("OSError in openning diag listener: " + str(err))
-            return
-
-        # this listener should die after one connection
-        # if port forwarding does not work, it will stay alive, so
-        # destructor will stop this thread
-        s.listen(1)
-        while not self.shutdown_listener:
-            if int(time.time()) - start > 120:
-                self.shutdown_listener = True
-            self.logger.info(f'waiting on port {port}... ')
-            try:
-                conn, addr = s.accept()
-                self.logger.info(f"Connected by {addr[0]} to port {port}")
-                data = conn.recv(8)
-                conn.sendall(data)
-                conn.close()
-            except TimeoutError:
-                self.logger.debug(f"listener timed out for port {port}")
+        run_listener(self.logger, host, port, self.listener_stop,
+                     DIAG_LISTENER_DEADLINE_SECONDS,
+                     response_mode="echo",
+                     accept_timeout=DIAG_LISTENER_ACCEPT_TIMEOUT_SECONDS)
 
     def open_test_port(self, port):
-        self.shutdown_listener = False
+        # fresh event per test so stopping this test cannot be undone
+        # by (or leak into) an earlier listener thread still winding down
+        self.listener_stop = threading.Event()
         self.listener = threading.Thread(
             target=self.open_listener, args=['', port])
         self.listener.setDaemon(True)
@@ -101,7 +84,7 @@ class WPDiag:
                                      text='pproxy test port', timeout=10)
 
     def close_test_port(self, port):
-        self.shutdown_listener = True
+        self.listener_stop.set()
         self.device.close_port(port)
 
     def is_connected_to_internet(self):

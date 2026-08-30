@@ -296,27 +296,33 @@ class Device():
         self.logger.info("skipping?" + str(skip) + " count=" + str(skip_count))
         return skip
 
-    def open_port(self, port, text, outside_port=None, timeout=DEFAULT_UPNP_TIMEOUT):
+    def open_port(self, port, text, outside_port=None, timeout=DEFAULT_UPNP_TIMEOUT, protos=("TCP", "UDP")):
         result = True
         if outside_port is None:
             outside_port = port
         if not self.should_skip_upnp():
             # no skipping, just try opening port normally with UPNP
             try:
-                result = self.set_port_forward("open", port, text, outside_port, timeout)
+                result = self.set_port_forward("open", port, text, outside_port, timeout, protos=protos)
             except upnp.soap.SOAPError:
-                result = self.set_port_forward("open", port, text, outside_port, 0, retry=True)
+                # keep the requested lease if possible; some routers only
+                # accept permanent (0) leases, so that stays the last resort
+                result = self.set_port_forward("open", port, text, outside_port, timeout,
+                                               retry=True, protos=protos)
+                if not result:
+                    result = self.set_port_forward("open", port, text, outside_port, 0,
+                                                   retry=True, protos=protos)
 
         self.logger.info("port forward result = " + str(result))
         return result
 
-    def close_port(self, port):
+    def close_port(self, port, protos=("TCP", "UDP")):
         if not self.should_skip_upnp():
             # no skipping, just try opening port normally with UPNP
             try:
-                self.set_port_forward("close", port, "")
+                self.set_port_forward("close", port, "", protos=protos)
             except upnp.soap.SOAPError:
-                self.set_port_forward("close", port, "", retry=True)
+                self.set_port_forward("close", port, "", retry=True, protos=protos)
 
     def get_all_port_mappings(self):
         still_counting = True
@@ -377,7 +383,8 @@ class Device():
                     return port_mapper.GetGenericPortMappingEntry(
                         NewPortMappingIndex=index_num,)
 
-    def set_port_forward(self, open_close, port, text, outside_port=None, timeout=DEFAULT_UPNP_TIMEOUT, retry=False):
+    def set_port_forward(self, open_close, port, text, outside_port=None, timeout=DEFAULT_UPNP_TIMEOUT,
+                         retry=False, protos=("TCP", "UDP")):
         result = True
         if outside_port is None:
             outside_port = port
@@ -393,45 +400,22 @@ class Device():
             self.logger.error("No port mappers found in retry")
         for port_mapper in self.port_mappers:
             try:
-                if open_close == "open":
-                    ret = port_mapper.AddPortMapping(
-                        NewRemoteHost='',
-                        NewExternalPort=outside_port,
-                        NewProtocol='TCP',
-                        NewInternalPort=port,
-                        NewInternalClient=str(local_ip),
-                        NewEnabled='1',
-                        NewPortMappingDescription=str(text),
-                        NewLeaseDuration=timeout)
-                    if ret:
-                        self.logger.critical(
-                            "return of port forward" + str(ret))
-
-                    ret = port_mapper.AddPortMapping(
-                        NewRemoteHost='',
-                        NewExternalPort=outside_port,
-                        NewProtocol='UDP',
-                        NewInternalPort=port,
-                        NewInternalClient=str(local_ip),
-                        NewEnabled='1',
-                        NewPortMappingDescription=str(text),
-                        NewLeaseDuration=timeout)
-                    if ret:
-                        self.logger.critical(
-                            "return of port forward" + str(ret))
-
-                else:
-                    ret = port_mapper.DeletePortMapping(
-                        NewRemoteHost='',
-                        NewExternalPort=port,
-                        NewProtocol='TCP')
-                    if ret:
-                        self.logger.critical(
-                            "return of port forward" + str(ret))
-                    ret = port_mapper.DeletePortMapping(
-                        NewRemoteHost='',
-                        NewExternalPort=port,
-                        NewProtocol='UDP')
+                for proto in protos:
+                    if open_close == "open":
+                        ret = port_mapper.AddPortMapping(
+                            NewRemoteHost='',
+                            NewExternalPort=outside_port,
+                            NewProtocol=proto,
+                            NewInternalPort=port,
+                            NewInternalClient=str(local_ip),
+                            NewEnabled='1',
+                            NewPortMappingDescription=str(text),
+                            NewLeaseDuration=timeout)
+                    else:
+                        ret = port_mapper.DeletePortMapping(
+                            NewRemoteHost='',
+                            NewExternalPort=port,
+                            NewProtocol=proto)
                     if ret:
                         self.logger.critical(
                             "return of port forward" + str(ret))

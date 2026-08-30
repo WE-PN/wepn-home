@@ -364,6 +364,18 @@ class TestPProxy(unittest.TestCase):
             self.pp.on_message_handler({'action': 'reload_service'}, MagicMock())
         mock_svc.return_value.reload_all.assert_called_once()
 
+    def test_on_message_handler_open_test_port(self):
+        self.pp.port_probe = MagicMock()
+        with patch('pproxy.Services'):
+            self.pp.on_message_handler({'action': 'open-test-port', 'port': 5100}, MagicMock())
+        self.pp.port_probe.request.assert_called_once_with(5100)
+
+    def test_on_message_handler_open_test_port_missing_port(self):
+        self.pp.port_probe = MagicMock()
+        with patch('pproxy.Services'):
+            self.pp.on_message_handler({'action': 'open-test-port'}, MagicMock())
+        self.pp.port_probe.request.assert_called_once_with(None)
+
     def test_on_message_handler_delete_user_calls_service(self):
         data = {'action': 'delete_user', 'cert_name': 'user1'}
         with patch('pproxy.Services') as mock_svc, \
