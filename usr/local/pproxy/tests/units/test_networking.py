@@ -72,6 +72,19 @@ def test_configure_calls_start_when_block_quic_changes(svc):
     mock_start.assert_called_once()
 
 
+def test_configure_tolerates_missing_block_quic_field(svc):
+    # networking.ini has never had block-quic set: configure() must not read it
+    # through get_field (which would log an "unknown field" error) or churn.
+    svc.service_config.has_option.side_effect = (
+        lambda section, field: field != 'block-quic')
+    svc.service_config.get_field.side_effect = ['tor', 'geo', 'tor', 'geo']
+    with patch.object(svc, 'start') as mock_start:
+        svc.configure('{"other": "value"}')
+    mock_start.assert_not_called()
+    assert all(c.args[1] != 'block-quic'
+               for c in svc.service_config.get_field.call_args_list)
+
+
 def test_configure_skips_start_when_nothing_changes(svc):
     svc.service_config.get_field.side_effect = [
         'tor', 'geo', 'true',
