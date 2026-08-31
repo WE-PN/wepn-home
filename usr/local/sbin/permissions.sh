@@ -79,6 +79,21 @@ done
 touch /var/local/pproxy/tor.db
 chown pproxy:shadow-runners /var/local/pproxy/tor.db*
 chmod 664 /var/local/pproxy/tor.db*
+# wireguard per-user configs: the local API (group shadow-runners) serves the
+# access link from wg.conf; keys stay owner-only
+if [ -d /var/local/pproxy/users ]; then
+	chown pproxy:shadow-runners /var/local/pproxy/users
+	chmod 0755 /var/local/pproxy/users
+	for d in /var/local/pproxy/users/*/; do
+		[ -d "$d" ] || continue
+		chown pproxy:shadow-runners "$d"
+		chmod 0750 "$d"
+		if [ -f "$d/wg.conf" ]; then
+			chown pproxy:shadow-runners "$d/wg.conf"
+			chmod 0640 "$d/wg.conf"
+		fi
+	done
+fi
 chown pproxy:shadow-runners /var/local/pproxy/shadow/shadow.sock
 chown pproxy:shadow-runners /var/local/pproxy/
 chown wepn-api:wepn-web $PPROXY_HOME/local_server
