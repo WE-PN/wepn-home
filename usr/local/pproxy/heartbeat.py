@@ -10,7 +10,6 @@ from ipw import IPW
 from lcd import LCD as LCD
 from measurement import Measurement
 from services import Services
-from shadow import Shadow
 from wstatus import WStatus
 from metrics_client import MetricsClient
 from constants import HEARTBEATS_TO_WARM
@@ -143,8 +142,11 @@ class HeartBeat:
                 sys_info = {}
         test_port = int(self.config.get('openvpn', 'port')) + 10
         if int(self.config.get('shadow', 'enabled')) == 1:
-            shadow = Shadow(self.logger)
-            test_port = int(shadow.get_max_port()) + 12
+            # Reuse the already-constructed service from self.services instead of
+            # building a throwaway Shadow() (which leaks a socket fd) per beat.
+            shadow = self.services.get_service('shadowsocks')
+            if shadow is not None:
+                test_port = int(shadow.get_max_port()) + 12
         # this line can update the status file contents
         diag_code = self.diag.get_error_code(test_port)
         self.status.reload()

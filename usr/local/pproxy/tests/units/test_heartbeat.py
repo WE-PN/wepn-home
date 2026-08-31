@@ -34,7 +34,6 @@ def mock_dependencies():
             patch('heartbeat.configparser.ConfigParser') as mock_config_parser, \
             patch('heartbeat.IPW') as mock_ipw, \
             patch('heartbeat.Device') as mock_device, \
-            patch('heartbeat.Shadow') as mock_shadow, \
             patch('heartbeat.LCD') as mock_lcd, \
             patch('heartbeat.requests') as mock_requests:
 
@@ -86,7 +85,6 @@ def mock_dependencies():
             'config': mock_config,
             'ipw': mock_ipw,
             'device': mock_device,
-            'shadow': mock_shadow,
             'lcd': mock_lcd,
             'requests': mock_requests
         }

@@ -1,7 +1,6 @@
 from usage import Usage
 from random import randrange  # nosec: not used for cryptography
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
-import atexit
 import base64
 import dataset
 import hashlib
@@ -15,6 +14,7 @@ import socket
 import sqlite3 as sqli
 import tempfile
 import time
+import weakref
 
 from device import Device
 from diag import WPDiag
@@ -34,9 +34,11 @@ class Shadow(Service):
         self.diag = WPDiag(logger)
         self.usage = Usage(logger, service_type="shadowsocks",
                            config=self.config, restore_callback=self.restore)
-        atexit.register(self.cleanup)
         self._ensure_db_delete_journal()
         fd, self.socket_path = tempfile.mkstemp()
+        # mkstemp returns an open fd we never use; close it so repeated Shadow()
+        # construction (one per heartbeat) does not leak descriptors.
+        os.close(fd)
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.default_prefix = "HTTP%2F1.1%20"
@@ -53,6 +55,26 @@ class Shadow(Service):
             self.sock.connect(self.config.get('shadow', 'server-socket'))
         except Exception as err:
             self.logger.error("Caught exception socket.error : %s" % err)
+
+        # Safety net: close the socket fd and remove its temp node when this
+        # instance is garbage collected or the process exits. weakref.finalize
+        # (unlike atexit.register(self.cleanup)) keeps no strong reference to
+        # self, so short-lived Shadow() instances are freed promptly instead of
+        # pinning their socket fd and an atexit entry until the process ends.
+        self._finalizer = weakref.finalize(
+            self, self._release_socket, self.sock, self.socket_path)
+
+    @staticmethod
+    def _release_socket(sock, socket_path):
+        try:
+            sock.close()
+        except OSError:
+            pass
+        try:
+            if socket_path and os.path.exists(socket_path):
+                os.remove(socket_path)
+        except OSError:
+            pass
 
     def cleanup(self):
         self.clear()
