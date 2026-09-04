@@ -184,6 +184,40 @@ def test_send_heartbeat_success(heartbeat, mock_dependencies):
     assert "data" in kwargs
 
 
+def test_send_heartbeat_success_rotates_local_token(heartbeat, mock_dependencies):
+    mock_dependencies['requests'].get.return_value.ok = True
+    mock_dependencies['metrics'].return_value.get_report.return_value = {}
+
+    heartbeat.send_heartbeat(lcd_print=False)
+
+    mock_dependencies['wstatus'].return_value.set.assert_any_call(
+        'local_token', str(heartbeat.local_token))
+    mock_dependencies['wstatus'].return_value.set.assert_any_call('prev_token', 'TOKEN')
+
+
+def test_send_heartbeat_request_exception_does_not_rotate_local_token(heartbeat, mock_dependencies):
+    import requests as real_requests
+    mock_dependencies['requests'].exceptions.RequestException = real_requests.exceptions.RequestException
+    mock_dependencies['requests'].get.side_effect = real_requests.exceptions.RequestException("network unreachable")
+    mock_dependencies['metrics'].return_value.get_report.return_value = {}
+
+    heartbeat.send_heartbeat(lcd_print=False)
+
+    set_calls = mock_dependencies['wstatus'].return_value.set.call_args_list
+    assert not any(call.args[0] in ('local_token', 'prev_token', 'pin') for call in set_calls)
+
+
+def test_send_heartbeat_server_error_does_not_rotate_local_token(heartbeat, mock_dependencies):
+    mock_dependencies['requests'].get.return_value.ok = False
+    mock_dependencies['requests'].get.return_value.status_code = 500
+    mock_dependencies['metrics'].return_value.get_report.return_value = {}
+
+    heartbeat.send_heartbeat(lcd_print=False)
+
+    set_calls = mock_dependencies['wstatus'].return_value.set.call_args_list
+    assert not any(call.args[0] in ('local_token', 'prev_token', 'pin') for call in set_calls)
+
+
 def test_send_heartbeat_warming(heartbeat, mock_dependencies):
     mock_dependencies['wstatus'].return_value.get.side_effect = lambda k: "10" if k == "hb_to_warm" else "2"
     mock_dependencies['wpdiag'].return_value.get_error_code.return_value = 999  # Not healthy

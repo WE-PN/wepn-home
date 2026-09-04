@@ -218,9 +218,11 @@ class HeartBeat:
         data_json = json.dumps(data)
         self.logger.debug("HB data to send: " + data_json)
         url = self.config.get('django', 'url') + "/api/device/heartbeat/"
+        hb_delivered = False
         try:
             response = requests.get(url, data=data_json, headers=headers, timeout=10)
             self.logger.debug("Response to HB" + str(response.status_code))
+            hb_delivered = response.ok
         except requests.exceptions.RequestException as exception_error:
             self.logger.error(
                 "Error in sending heartbeat: \r\n\t" + str(exception_error))
@@ -229,10 +231,19 @@ class HeartBeat:
             lcd.set_lcd_present(self.config.get('hw', 'lcd'))
             display_str = self.get_display_string_status(status, diag_code, lcd)
             lcd.display(display_str, 20)
-        self.status.set('pin', str(self.pin))
-        prev_token = self.status.get('local_token')
-        self.status.set('prev_token', str(prev_token))
-        self.status.set('local_token', str(self.local_token))
+        if hb_delivered:
+            # Only rotate pin/local_token on disk once the server has
+            # confirmed receipt of this heartbeat. Otherwise a failed
+            # push (e.g. network not yet up right after a reboot) would
+            # still advance status.ini, leaving the backend holding a
+            # local_token the Pod's own local API no longer accepts.
+            self.status.set('pin', str(self.pin))
+            prev_token = self.status.get('local_token')
+            self.status.set('prev_token', str(prev_token))
+            self.status.set('local_token', str(self.local_token))
+        else:
+            self.logger.error(
+                "Heartbeat not confirmed by server; keeping existing local_token")
         self.status.set('last_diag_code', str(diag_code))
         self.status.set('last_heartbeat_timestamp', str(timestamp))
         if self.save_status_immediately:
