@@ -33,6 +33,7 @@ logger = logging.getLogger()
 services = Services(logger)
 
 if services.get_saved_server_config_version() != 1:
+    print('config version above 1, config migration not necessary')
     sys.exit(0)
 
 url = base_url + "/api/device/" + device_id + "/"
@@ -43,6 +44,7 @@ try:
     response = requests.get(url, data=json.dumps(auth), headers=headers, timeout=10)
     server_data = json.loads(response.text)
     if server_data.get("config"):
+        print('config exists in remote, config migration not necessary')
         sys.exit(0)
 except requests.exceptions.RequestException as e:
     logger.error("Error fetching server config: " + str(e))
@@ -50,6 +52,13 @@ except requests.exceptions.RequestException as e:
 
 current_version = services.get_saved_server_config_version()
 cfg = services.get_config_string(version=current_version)
+
+# Fresh device (no config on the backend yet): enable measurements by default.
+for service in cfg.get("services", []):
+    if service.get("name") == "measurement":
+        service.setdefault("settings", {})["enabled"] = True
+        break
+
 data = {
     "id": device_id,
     "serial_number": serial_number,
