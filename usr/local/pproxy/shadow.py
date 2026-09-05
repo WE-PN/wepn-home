@@ -310,9 +310,14 @@ class Shadow(Service):
             access_params = '@' + str(ip) + ':' + str(port)
             if self.is_prefix_enabled() and self.get_prefix() is not None:
                 access_params += "/?prefix=" + str(self.get_prefix())
+            # certname may have been stored with stray non-printable chars
+            # (e.g. from an app-supplied name) before callers sanitized it;
+            # it's appended last, so strip here too rather than surface it
+            # at the tail of the link.
+            clean_certname = ''.join(ch for ch in certname if ch.isprintable())
             uri64 = 'ss://' + \
                 base64.urlsafe_b64encode(str.encode(uri)).decode(
-                    'utf-8') + access_params + "#WEPN-" + certname
+                    'utf-8') + access_params + "#WEPN-" + clean_certname
             hash_link = hashlib.sha256(uri64.encode()).hexdigest()[:10]
             return uri64, hash_link
         except:

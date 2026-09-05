@@ -274,6 +274,10 @@ class TestShadow(unittest.TestCase):
                 uri, h = self.shadow_service.create_link_and_hash('pw', '1.1.1.1', 80, 'user')
                 self.assertIn('prefix=pre', uri)
 
+    def test_create_link_and_hash_strips_non_printable_certname(self):
+        uri, h = self.shadow_service.create_link_and_hash('pw', '1.1.1.1', 80, 'user​\n')
+        self.assertTrue(uri.endswith('#WEPN-user'))
+
     def test_get_prefix_default(self):
         with patch('shadow.Shadow.get_overlayable_config_value', return_value='def'):
             self.assertEqual(self.shadow_service.get_prefix(), 'def')

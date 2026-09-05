@@ -136,7 +136,12 @@ class PProxy():
         self.loggers[index] = logger
 
     def sanitize_str(self, str_in):
-        return (shlex.quote(str_in))
+        # shlex.quote only escapes shell metacharacters; it leaves control
+        # chars, zero-width spaces and other non-printable unicode (common
+        # in app-supplied names) untouched, so they end up embedded verbatim
+        # in things like access links. Strip those before quoting.
+        printable = ''.join(ch for ch in str_in if ch.isprintable())
+        return shlex.quote(printable)
 
     def get_response_cooldown(self):
         if self.config.has_section('notify') and self.config.has_option(

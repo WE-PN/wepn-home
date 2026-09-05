@@ -75,6 +75,12 @@ class TestPProxy(unittest.TestCase):
     def test_sanitize_str_safe_string_unchanged(self):
         self.assertEqual(self.pp.sanitize_str('safestring'), 'safestring')
 
+    def test_sanitize_str_strips_trailing_control_char(self):
+        self.assertEqual(self.pp.sanitize_str('John\n'), 'John')
+
+    def test_sanitize_str_strips_zero_width_space(self):
+        self.assertEqual(self.pp.sanitize_str('John​'), 'John')
+
     # --- get_tunnel_from_data ---
 
     def test_get_tunnel_from_data_returns_tunnel_value(self):
