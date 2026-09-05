@@ -104,7 +104,12 @@ class MQTTForwarder():
 
     def build_client(self):
         client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2,
-                             self.config.get('mqtt', 'username'), clean_session=False)
+                             self.config.get('mqtt', 'username'), clean_session=False,
+                             # we reload config.ini and rebuild the client ourselves
+                             # on every disconnect (see run()); paho's own
+                             # reconnect-with-stale-creds loop would otherwise mask
+                             # a credential rotation (e.g. right after claim) forever
+                             reconnect_on_failure=False)
         client.on_connect = self.on_connect
         client.on_message = self.on_message
         client.on_disconnect = self.on_disconnect
@@ -117,19 +122,27 @@ class MQTTForwarder():
     def run(self):
         self.wait_until_claimed()
         self.channel.start()
-        client = self.build_client()
         while True:
+            # Re-read config.ini before every (re)connect attempt: it may
+            # have just gained real credentials after claim (onboard.py
+            # writes them before flipping claimed=1), or the broker may
+            # have rejected a rotated key - reload rather than keep
+            # retrying with whatever was in memory at process start.
+            self.config.read(CONFIG_FILE)
+            client = self.build_client()
             try:
                 self.logger.debug("mqtt host: " + str(self.config.get('mqtt', 'host')))
                 client.connect(str(self.config.get('mqtt', 'host')),
                                int(self.config.get('mqtt', 'port')),
                                int(self.config.get('mqtt', 'timeout')))
-                # blocking call: processes traffic and handles broker reconnects
+                # blocking call: processes traffic until disconnected; returns
+                # (rather than retrying internally) since build_client()
+                # disables reconnect_on_failure
                 client.loop_forever()
             except Exception as error:
                 self.logger.error("MQTT connect failed: " + str(error))
                 self.set_mqtt_status(0, 0)
-                time.sleep(CONNECT_RETRY_SECONDS)
+            time.sleep(CONNECT_RETRY_SECONDS)
 
 
 if __name__ == "__main__":

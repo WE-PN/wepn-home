@@ -73,6 +73,56 @@ class TestMQTTForwarder(unittest.TestCase):
         self.fwd.status.set.assert_any_call('mqtt-reason', 135)
         self.fwd.channel.send_state.assert_called_once_with(0, 135)
 
+    # --- build_client ---
+
+    def test_build_client_disables_reconnect_on_failure(self):
+        with patch('mqtt_forwarder.mqtt.Client') as mock_client_cls:
+            self.fwd.build_client()
+        _, kwargs = mock_client_cls.call_args
+        self.assertFalse(kwargs['reconnect_on_failure'])
+
+    # --- run: config reload around (re)connects ---
+
+    def test_run_reloads_config_before_first_connect(self):
+        self.fwd.wait_until_claimed = MagicMock()
+        self.fwd.channel.start = MagicMock()
+        self.fwd.config.read.reset_mock()
+        with patch('mqtt_forwarder.mqtt.Client') as mock_client_cls, \
+                patch('mqtt_forwarder.time.sleep', side_effect=StopIteration):
+            mock_client_cls.return_value.connect.return_value = None
+            with self.assertRaises(StopIteration):
+                self.fwd.run()
+        self.fwd.config.read.assert_called_once_with('/etc/pproxy/config.ini')
+        mock_client_cls.return_value.loop_forever.assert_called_once()
+
+    def test_run_reloads_config_again_after_disconnect(self):
+        self.fwd.wait_until_claimed = MagicMock()
+        self.fwd.channel.start = MagicMock()
+        self.fwd.config.read.reset_mock()
+        with patch('mqtt_forwarder.mqtt.Client') as mock_client_cls, \
+                patch('mqtt_forwarder.time.sleep',
+                      side_effect=[None, StopIteration]):
+            mock_client_cls.return_value.connect.return_value = None
+            with self.assertRaises(StopIteration):
+                self.fwd.run()
+        # once before the first connect attempt, once before the retry
+        # after loop_forever() returned (simulated disconnect/rejection)
+        self.assertEqual(self.fwd.config.read.call_count, 2)
+        self.assertEqual(mock_client_cls.return_value.loop_forever.call_count, 2)
+
+    def test_run_reloads_config_after_connect_exception(self):
+        self.fwd.wait_until_claimed = MagicMock()
+        self.fwd.channel.start = MagicMock()
+        self.fwd.config.read.reset_mock()
+        with patch('mqtt_forwarder.mqtt.Client') as mock_client_cls, \
+                patch('mqtt_forwarder.time.sleep',
+                      side_effect=[None, StopIteration]):
+            mock_client_cls.return_value.connect.side_effect = OSError("unreachable")
+            with self.assertRaises(StopIteration):
+                self.fwd.run()
+        self.assertEqual(self.fwd.config.read.call_count, 2)
+        self.fwd.status.set.assert_any_call('mqtt', 0)
+
     def test_on_disconnect_reports_down(self):
         self.fwd.on_disconnect(MagicMock(), None, None, 5)
         self.fwd.status.set.assert_any_call('mqtt', 0)
