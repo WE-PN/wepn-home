@@ -39,6 +39,13 @@ NOTIFY_ENTRY_TTL_SECONDS = 604800        # 7 days
 NOTIFY_MAX_ENTRIES = 200
 NOTIFY_PUSH_COOLDOWN_SECONDS = 3600      # 1h
 NOTIFY_RESPONSE_COOLDOWN_SECONDS = 60    # default; overridable via config.ini
+PIN_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'  # matches device_key's alphabet
+PIN_LENGTH = 16                                     # 80 bits of entropy
+PIN_TOTP_STEP_SECONDS = 900                         # 15-minute cadence
+PIN_TOTP_WINDOW = 1                                 # ± steps tolerated (grace + clock drift)
+PIN_TOTP_CODE_MIN = 1111111111
+PIN_TOTP_CODE_MAX = 9999999999
+PIN_TOTP_PURPOSE_LOCAL_TOKEN = b"\x02"
 SERVICE_FILE_BASE = "/var/local/pproxy/"
 SKIP_OTA_CHECK = False
 # ad-hoc test port ("open-test-port" action)

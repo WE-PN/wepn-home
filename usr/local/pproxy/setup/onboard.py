@@ -13,6 +13,7 @@ except ImportError:
 
 import shlex  # nosec: go.we-pn.com/waiver-1
 import logging.config
+import pin_totp
 from ipw import IPW
 import paho.mqtt.client as mqtt
 from heartbeat import HeartBeat
@@ -67,6 +68,7 @@ class OnBoard():
             self.factory = rpi_gpio.KeypadFactory()
         self.rand_key = None
         self.rand_e2e_key = None
+        self.rand_pin = None
         self.retries_so_far_screen = 0
         self.lcd = LCD()
         self.leds = LEDClient()
@@ -87,6 +89,9 @@ class OnBoard():
     def generate_rand_e2e_key(self):
         t_key = secrets.token_bytes(16)
         self.rand_e2e_key = base64.urlsafe_b64encode(t_key).decode("utf-8").strip()
+
+    def generate_rand_pin(self):
+        self.rand_pin = pin_totp.generate_pin()
 
     # this is used for checking previous keys used
     def set_rand_key(self, key):
@@ -212,6 +217,8 @@ class OnBoard():
             self.status.set('status', 'temporary_key', "CLAIMED")
             if self.rand_e2e_key is not None:
                 self.status.set('status', 'e2e_key', str(self.rand_e2e_key))
+            if self.rand_pin is not None:
+                self.status.set('status', 'pin', str(self.rand_pin))
             with open(CONFIG_FILE, 'w') as configfile:
                 self.config.write(configfile)
             write_ini_atomic(STATUS_FILE, self.status)
@@ -257,6 +264,7 @@ class OnBoard():
             self.save_temp_key(new_key=self.rand_e2e_key,
                                section_name="prev_e2e_key",
                                temp_key_name="temp_e2e_key")
+            self.generate_rand_pin()
         self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2,
                                   self.config.get('mqtt', 'username'), clean_session=True)
         # TODO: to log this effectively for error logs,

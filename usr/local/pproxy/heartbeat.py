@@ -3,6 +3,7 @@ import json
 import random
 import requests
 
+import pin_totp
 from datetime import datetime
 from device import Device
 from diag import WPDiag
@@ -42,14 +43,25 @@ class HeartBeat:
         self.diag = WPDiag(logger)
         self.services = Services(logger)
         self.metrics = MetricsClient(logger=self.logger)
-        # This one is displayed on screen for call verification
-        self.pin = random.SystemRandom().randint(1111111111, 9999999999)
-        # This one is used for API access
-        self.local_token = random.SystemRandom().randint(1111111111, 9999999999)
+        # This one is displayed on screen for call verification. It is a
+        # permanent, once-per-onboarding seed (mirrors device_key/e2e_key) -
+        # not regenerated on every heartbeat.
+        self._pin, self._pin_is_new = self._resolve_pin()
+        self.pin = self._pin
+        # This one is used for API access. It's a pure function of
+        # (pin, time step), so independent HeartBeat instances constructed
+        # around the same time always agree - no random-value race.
+        self.local_token = pin_totp.derive_local_token(self._pin)
         # Print these to screen for bring-your-own device users without a screen
         self.logger.debug("PIN=" + str(self.pin))
         self.logger.debug("Local token=" + str(self.local_token))
         self.save_status_immediately = True
+
+    def _resolve_pin(self):
+        existing = self.status.get('pin')
+        if pin_totp.is_valid_pin_format(existing):
+            return existing, False
+        return pin_totp.generate_pin(), True
 
     def buffer_status_saves(self, value):
         self.save_status_immediately = not value
@@ -107,7 +119,7 @@ class HeartBeat:
             else:
                 color = "green"
             display_str = [(1, "PIN: ", 0, "blue"),
-                           (2, str(self.pin), 0, "blue"),
+                           (2, str(self.local_token), 0, "blue"),
                            (3, icons, 1, color)]
 
         return display_str
@@ -231,19 +243,22 @@ class HeartBeat:
             lcd.set_lcd_present(self.config.get('hw', 'lcd'))
             display_str = self.get_display_string_status(status, diag_code, lcd)
             lcd.display(display_str, 20)
+        # local_token is a pure function of (pin, time step), so it's always
+        # safe to refresh locally regardless of delivery - it needs no
+        # confirmation to be locally valid, and independent/concurrent
+        # heartbeats always agree on the same value for a given time step.
+        self.status.set('local_token', str(self.local_token))
         if hb_delivered:
-            # Only rotate pin/local_token on disk once the server has
-            # confirmed receipt of this heartbeat. Otherwise a failed
-            # push (e.g. network not yet up right after a reboot) would
-            # still advance status.ini, leaving the backend holding a
-            # local_token the Pod's own local API no longer accepts.
-            self.status.set('pin', str(self.pin))
-            prev_token = self.status.get('local_token')
-            self.status.set('prev_token', str(prev_token))
-            self.status.set('local_token', str(self.local_token))
+            if self._pin_is_new:
+                # CAS: a concurrent heartbeat may have already committed a
+                # bootstrap pin while our own HTTP request was in flight.
+                # Re-read before writing so only one candidate ever sticks.
+                self.status.reload()
+                if not pin_totp.is_valid_pin_format(self.status.get('pin')):
+                    self.status.set('pin', self._pin)
         else:
             self.logger.error(
-                "Heartbeat not confirmed by server; keeping existing local_token")
+                "Heartbeat not confirmed by server; bootstrap pin (if any) not yet persisted")
         self.status.set('last_diag_code', str(diag_code))
         self.status.set('last_heartbeat_timestamp', str(timestamp))
         if self.save_status_immediately:
