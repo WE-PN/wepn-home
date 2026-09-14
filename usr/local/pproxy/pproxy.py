@@ -664,6 +664,11 @@ class PProxy():
             self.status.set('mqtt', 0)
             self.status.set('mqtt-reason', 0)
             self.status.set('claimed', 0)
+            # invalidate the pin too: otherwise a HeartBeat racing this wipe
+            # (e.g. an onboarding button press) can still see the old,
+            # still-valid-format pin and derive/persist a local_token from
+            # it that no longer matches whatever pin the next claim commits
+            self.status.set('pin', '00000000')
             self.status.save()
             self.save_state("3")
             # reboot to go into onboarding

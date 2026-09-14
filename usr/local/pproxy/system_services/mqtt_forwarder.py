@@ -7,10 +7,12 @@ import time
 from logging import config  # noqa
 
 import paho.mqtt.client as mqtt
+import requests
 
 up_dir = os.path.dirname(os.path.abspath(__file__)) + '/../'
 sys.path.append(up_dir)
 from constants import CLAIMED_RECHECK_SECONDS, LOG_CONFIG  # noqa E402 need up_dir first
+from device import Device  # noqa E402
 from msg_channel import ChannelClient  # noqa E402
 from wstatus import WStatus  # noqa E402
 
@@ -82,6 +84,44 @@ class MQTTForwarder():
         rc = rc_to_int(reason_code)
         self.set_mqtt_status(0, rc)
         self.channel.send_state(0, rc)
+        if self._is_auth_failure(reason_code):
+            # The broker cut us off (e.g. credentials revoked by an
+            # unclaim) rather than us cleanly closing the connection. If the
+            # unclaim/wipe command was supposed to arrive over this same MQTT
+            # line, it may never show up now that the line is gone -- ask
+            # the backend directly instead of waiting for a message that
+            # might not come.
+            self._recheck_claim_after_auth_failure()
+
+    def _is_auth_failure(self, reason_code):
+        name = getattr(reason_code, "getName", lambda: "")()
+        name = name.lower()
+        return "authoriz" in name or "bad user name or password" in name
+
+    def _recheck_claim_after_auth_failure(self):
+        self.logger.warning("mqtt disconnected with an auth-related reason; "
+                            "checking claim status with the backend directly")
+        try:
+            url = self.config.get('django', 'url') + "/api/device/is_claimed/"
+            data = json.dumps({'serial_number': self.config.get('django', 'serial_number')})
+            headers = {'Content-Type': 'application/json'}
+            response = requests.post(url, data=data, headers=headers, timeout=10)
+            is_claimed = (response.status_code == 200)
+        except requests.exceptions.RequestException:
+            self.logger.error("could not verify claim status with backend after mqtt auth failure")
+            return
+        if is_claimed:
+            return
+        self.logger.critical("backend confirms device is unclaimed; wiping local claim state")
+        self.status.reload()
+        self.status.set('mqtt', 0)
+        self.status.set('mqtt-reason', 0)
+        self.status.set('claimed', 0)
+        self.status.set('state', 3)
+        # see pproxy.py's wipe_device handler for why pin must be invalidated too
+        self.status.set('pin', '00000000')
+        self.status.save()
+        Device(self.logger).reboot()
 
     def on_message(self, client, userdata, msg):
         # never log the payload: message bodies can carry access links, cert

@@ -145,9 +145,80 @@ class TestMQTTForwarder(unittest.TestCase):
     def test_on_disconnect_converts_reason_code_object(self):
         class FakeReasonCode:
             value = 7
+
+            def getName(self):
+                return "Normal disconnection"
         self.fwd.on_disconnect(MagicMock(), None, None, FakeReasonCode())
         self.fwd.status.set.assert_any_call('mqtt-reason', 7)
         self.fwd.channel.send_state.assert_called_once_with(0, 7)
+
+    # --- auth-failure disconnect: recheck claim with backend, wipe if unclaimed ---
+
+    class _FakeAuthReasonCode:
+        value = 135
+
+        def getName(self):
+            return "Not authorized"
+
+    class _FakeBadPasswordReasonCode:
+        value = 134
+
+        def getName(self):
+            return "Bad user name or password"
+
+    def test_is_auth_failure_true_for_not_authorized(self):
+        self.assertTrue(self.fwd._is_auth_failure(self._FakeAuthReasonCode()))
+
+    def test_is_auth_failure_true_for_bad_password(self):
+        self.assertTrue(self.fwd._is_auth_failure(self._FakeBadPasswordReasonCode()))
+
+    def test_is_auth_failure_false_for_plain_int(self):
+        # legacy/plain rc without a getName() -- e.g. MQTTv3.1.1 codes as ints
+        self.assertFalse(self.fwd._is_auth_failure(7))
+
+    def test_is_auth_failure_false_for_unrelated_reason(self):
+        class FakeReasonCode:
+            def getName(self):
+                return "Keep alive timeout"
+        self.assertFalse(self.fwd._is_auth_failure(FakeReasonCode()))
+
+    def test_on_disconnect_triggers_recheck_on_auth_failure(self):
+        self.fwd._recheck_claim_after_auth_failure = MagicMock()
+        self.fwd.on_disconnect(MagicMock(), None, None, self._FakeAuthReasonCode())
+        self.fwd._recheck_claim_after_auth_failure.assert_called_once()
+
+    def test_on_disconnect_does_not_recheck_on_normal_disconnect(self):
+        self.fwd._recheck_claim_after_auth_failure = MagicMock()
+        self.fwd.on_disconnect(MagicMock(), None, None, 7)
+        self.fwd._recheck_claim_after_auth_failure.assert_not_called()
+
+    def test_recheck_claim_still_claimed_does_not_wipe(self):
+        with patch('mqtt_forwarder.requests') as mock_requests, \
+                patch('mqtt_forwarder.Device') as mock_device_cls:
+            mock_requests.post.return_value.status_code = 200
+            self.fwd._recheck_claim_after_auth_failure()
+        self.fwd.status.set.assert_not_called()
+        mock_device_cls.return_value.reboot.assert_not_called()
+
+    def test_recheck_claim_unclaimed_wipes_and_reboots(self):
+        with patch('mqtt_forwarder.requests') as mock_requests, \
+                patch('mqtt_forwarder.Device') as mock_device_cls:
+            mock_requests.post.return_value.status_code = 404
+            self.fwd._recheck_claim_after_auth_failure()
+        self.fwd.status.set.assert_any_call('claimed', 0)
+        self.fwd.status.set.assert_any_call('pin', '00000000')
+        self.fwd.status.save.assert_called_once()
+        mock_device_cls.return_value.reboot.assert_called_once()
+
+    def test_recheck_claim_network_error_does_not_wipe(self):
+        import requests as real_requests
+        with patch('mqtt_forwarder.requests') as mock_requests, \
+                patch('mqtt_forwarder.Device') as mock_device_cls:
+            mock_requests.exceptions.RequestException = real_requests.exceptions.RequestException
+            mock_requests.post.side_effect = real_requests.exceptions.RequestException("down")
+            self.fwd._recheck_claim_after_auth_failure()
+        self.fwd.status.set.assert_not_called()
+        mock_device_cls.return_value.reboot.assert_not_called()
 
     # --- on_message ---
 
