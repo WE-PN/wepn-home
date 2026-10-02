@@ -6,8 +6,11 @@ from unittest.mock import MagicMock, patch, ANY
 #autopep8: off
 # Add the parent directory to sys.path to import modules
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-from constants import HEALTHY_DIAG_CODE, HEARTBEATS_TO_WARM, METRICS_REPORT_INTERVAL_SECONDS
+from constants import HEALTHY_DIAG_CODE, HEARTBEATS_TO_WARM, METRICS_REPORT_INTERVAL_SECONDS, PIN_TOTP_STEP_SECONDS
+import pin_totp
 #autopep8: on
+
+TEST_PIN = 'ABCDEFGHJKLMNPQR'
 
 # Mock EXTERNAL dependencies only
 for m in ['qrcode', 'Adafruit_SSD1306', 'getmac', 'pystemd', 'pystemd.systemd1', 'distro', 'netifaces', 'psutil', 'upnpclient', 'packaging', 'packaging.version', 'adafruit_rgb_display', 'adafruit_rgb_display.st7789', 'sanitize_filename', 'RPi', 'RPi.GPIO', 'luma', 'luma.core', 'luma.core.interface', 'luma.core.interface.serial', 'luma.oled', 'luma.oled.device', 'board', 'sqlalchemy', 'sqlalchemy.exc', 'dataset', 'digitalio', 'busio']:
@@ -34,7 +37,6 @@ def mock_dependencies():
             patch('heartbeat.configparser.ConfigParser') as mock_config_parser, \
             patch('heartbeat.IPW') as mock_ipw, \
             patch('heartbeat.Device') as mock_device, \
-            patch('heartbeat.Shadow') as mock_shadow, \
             patch('heartbeat.LCD') as mock_lcd, \
             patch('heartbeat.requests') as mock_requests:
 
@@ -60,7 +62,7 @@ def mock_dependencies():
             'state': '2',  # Running
             'sw': '1.0.0',
             'local_token': 'TOKEN',
-            'pin': '123456'
+            'pin': TEST_PIN
         }.get(key, 'mock_value')
         mock_wstatus.return_value.status.getint.return_value = 0
 
@@ -86,7 +88,6 @@ def mock_dependencies():
             'config': mock_config,
             'ipw': mock_ipw,
             'device': mock_device,
-            'shadow': mock_shadow,
             'lcd': mock_lcd,
             'requests': mock_requests
         }
@@ -101,8 +102,59 @@ def test_initialization(heartbeat, mock_logger):
     assert heartbeat.logger == mock_logger
     assert heartbeat.mqtt_connected == 0
     assert heartbeat.save_status_immediately is True
-    assert isinstance(heartbeat.pin, int)
+    assert pin_totp.is_valid_pin_format(heartbeat.pin)
     assert isinstance(heartbeat.local_token, int)
+
+
+def test_two_instances_agree_on_local_token(mock_logger, mock_dependencies):
+    # The direct race-regression test: independent HeartBeat() constructions
+    # around the same time must compute the identical local_token, since it's
+    # now a pure function of (pin, time step) rather than random-per-call.
+    hb1 = HeartBeat(mock_logger)
+    hb2 = HeartBeat(mock_logger)
+    assert hb1.pin == hb2.pin
+    assert hb1.local_token == hb2.local_token
+
+
+def test_local_token_changes_across_time_step_boundary(mock_logger, mock_dependencies):
+    with patch('pin_totp.time.time') as mock_time:
+        mock_time.return_value = 0
+        hb1 = HeartBeat(mock_logger)
+        mock_time.return_value = PIN_TOTP_STEP_SECONDS
+        hb2 = HeartBeat(mock_logger)
+    assert hb1.pin == hb2.pin
+    assert hb1.local_token != hb2.local_token
+
+
+def test_bootstraps_new_pin_when_missing(mock_logger, mock_dependencies):
+    mock_dependencies['wstatus'].return_value.get.side_effect = lambda key: {
+        'hb_to_warm': '0',
+        'state': '2',
+        'sw': '1.0.0',
+        'local_token': 'TOKEN',
+        'pin': ''
+    }.get(key, 'mock_value')
+
+    heartbeat = HeartBeat(mock_logger)
+
+    assert heartbeat._pin_is_new is True
+    assert pin_totp.is_valid_pin_format(heartbeat.pin)
+
+
+def test_bootstraps_new_pin_when_legacy_format(mock_logger, mock_dependencies):
+    # Pre-migration devices have a legacy numeric pin (or the '00000000'
+    # fresh-install placeholder) - both must be treated as "missing".
+    mock_dependencies['wstatus'].return_value.get.side_effect = lambda key: {
+        'hb_to_warm': '0',
+        'state': '2',
+        'sw': '1.0.0',
+        'local_token': 'TOKEN',
+        'pin': '00000000'
+    }.get(key, 'mock_value')
+
+    heartbeat = HeartBeat(mock_logger)
+
+    assert heartbeat._pin_is_new is True
 
 
 def test_buffer_status_saves(heartbeat):
@@ -184,6 +236,98 @@ def test_send_heartbeat_success(heartbeat, mock_dependencies):
     args, kwargs = mock_dependencies['requests'].get.call_args
     assert "api/device/heartbeat/" in args[0]
     assert "data" in kwargs
+
+
+def test_send_heartbeat_success_refreshes_local_token(heartbeat, mock_dependencies):
+    mock_dependencies['requests'].get.return_value.ok = True
+    mock_dependencies['metrics'].return_value.get_report.return_value = {}
+
+    heartbeat.send_heartbeat(lcd_print=False)
+
+    mock_dependencies['wstatus'].return_value.set.assert_any_call(
+        'local_token', str(heartbeat.local_token))
+    # pin is already valid-format (TEST_PIN) - no bootstrap candidate to persist
+    set_calls = mock_dependencies['wstatus'].return_value.set.call_args_list
+    assert not any(call.args[0] == 'pin' for call in set_calls)
+
+
+def test_send_heartbeat_request_exception_still_refreshes_local_token(heartbeat, mock_dependencies):
+    import requests as real_requests
+    mock_dependencies['requests'].exceptions.RequestException = real_requests.exceptions.RequestException
+    mock_dependencies['requests'].get.side_effect = real_requests.exceptions.RequestException("network unreachable")
+    mock_dependencies['metrics'].return_value.get_report.return_value = {}
+
+    heartbeat.send_heartbeat(lcd_print=False)
+
+    mock_dependencies['wstatus'].return_value.set.assert_any_call(
+        'local_token', str(heartbeat.local_token))
+
+
+def test_send_heartbeat_request_exception_does_not_persist_bootstrap_pin(mock_logger, mock_dependencies):
+    import requests as real_requests
+    mock_dependencies['wstatus'].return_value.get.side_effect = lambda key: {
+        'hb_to_warm': '0', 'state': '2', 'sw': '1.0.0', 'local_token': 'TOKEN', 'pin': ''
+    }.get(key, 'mock_value')
+    heartbeat = HeartBeat(mock_logger)
+    mock_dependencies['requests'].exceptions.RequestException = real_requests.exceptions.RequestException
+    mock_dependencies['requests'].get.side_effect = real_requests.exceptions.RequestException("network unreachable")
+    mock_dependencies['metrics'].return_value.get_report.return_value = {}
+
+    heartbeat.send_heartbeat(lcd_print=False)
+
+    set_calls = mock_dependencies['wstatus'].return_value.set.call_args_list
+    assert not any(call.args[0] == 'pin' for call in set_calls)
+
+
+def test_send_heartbeat_server_error_still_refreshes_local_token(heartbeat, mock_dependencies):
+    mock_dependencies['requests'].get.return_value.ok = False
+    mock_dependencies['requests'].get.return_value.status_code = 500
+    mock_dependencies['metrics'].return_value.get_report.return_value = {}
+
+    heartbeat.send_heartbeat(lcd_print=False)
+
+    mock_dependencies['wstatus'].return_value.set.assert_any_call(
+        'local_token', str(heartbeat.local_token))
+
+
+def test_send_heartbeat_success_persists_bootstrap_pin(mock_logger, mock_dependencies):
+    mock_dependencies['wstatus'].return_value.get.side_effect = lambda key: {
+        'hb_to_warm': '0', 'state': '2', 'sw': '1.0.0', 'local_token': 'TOKEN', 'pin': ''
+    }.get(key, 'mock_value')
+    heartbeat = HeartBeat(mock_logger)
+    mock_dependencies['requests'].get.return_value.ok = True
+    mock_dependencies['metrics'].return_value.get_report.return_value = {}
+
+    heartbeat.send_heartbeat(lcd_print=False)
+
+    mock_dependencies['wstatus'].return_value.reload.assert_called()
+    mock_dependencies['wstatus'].return_value.set.assert_any_call('pin', heartbeat._pin)
+
+
+def test_send_heartbeat_bootstrap_pin_defers_to_concurrent_writer(mock_logger, mock_dependencies):
+    # A concurrent heartbeat committed a valid pin while our request was in
+    # flight (simulated by having get() return TEST_PIN only after reload()).
+    calls = {'reloaded': False}
+
+    def get_side_effect(key):
+        if key == 'pin':
+            return TEST_PIN if calls['reloaded'] else ''
+        return {'hb_to_warm': '0', 'state': '2', 'sw': '1.0.0', 'local_token': 'TOKEN'}.get(key, 'mock_value')
+
+    mock_dependencies['wstatus'].return_value.get.side_effect = get_side_effect
+    heartbeat = HeartBeat(mock_logger)
+    assert heartbeat._pin_is_new is True
+
+    def reload_side_effect():
+        calls['reloaded'] = True
+    mock_dependencies['wstatus'].return_value.reload.side_effect = reload_side_effect
+    mock_dependencies['requests'].get.return_value.ok = True
+    mock_dependencies['metrics'].return_value.get_report.return_value = {}
+
+    heartbeat.send_heartbeat(lcd_print=False)
+
+    set_calls = mock_dependencies['wstatus'].return_value.set.call_args_list
+    assert not any(call.args[0] == 'pin' for call in set_calls)
 
 
 def test_send_heartbeat_warming(heartbeat, mock_dependencies):

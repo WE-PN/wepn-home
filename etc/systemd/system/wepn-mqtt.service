@@ -1,13 +1,11 @@
 [Unit]
-Description=WEPN Main Service
-After=network-online.target wepn-leds.service
-Before=wepn-keypad.service
+Description=WEPN MQTT Forwarder Service
+After=network-online.target
 Wants=network-online.target
 
 [Service]
-LimitNOFILE=65536
 User=pproxy
-ExecStart=/var/local/pproxy/wepn-env/bin/python3 /usr/local/pproxy/run.py
+ExecStart=/var/local/pproxy/wepn-env/bin/python3 /usr/local/pproxy/system_services/mqtt_forwarder.py
 KillMode=control-group
 Restart=on-failure
 RestartPreventExitStatus=255

@@ -75,6 +75,13 @@ Endpoint = $ip:$clean_port
 AllowedIPs = 0.0.0.0/0
 EOF
 
+# wg.conf is served to the app by the local API service, which runs as a
+# separate user in the shadow-runners group. Make the dir traversable and the
+# config group-readable; the keys stay owner-only (umask 077 set above).
+chgrp shadow-runners "$userdir" "$userdir/wg.conf" 2>/dev/null || true
+chmod 0750 "$userdir"
+chmod 0640 "$userdir/wg.conf"
+
 # sudo wg set wg0 peer $pub preshared-key /var/local/pproxy/users/$clean_name/psk allowed-ips $inv_ip/32
 wepn-run 1 6 0 $pub $clean_name $inv_ip
 

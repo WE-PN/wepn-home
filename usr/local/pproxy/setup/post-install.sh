@@ -320,12 +320,16 @@ systemctl enable wepn-api
 systemctl enable wepn-keypad
 systemctl enable wepn-leds
 systemctl enable wepn-main
+systemctl enable wepn-messages
 systemctl enable wepn-metrics
+systemctl enable wepn-mqtt
 systemctl start wepn-api
 systemctl start wepn-keypad
 systemctl start wepn-main
 systemctl start wepn-metrics
 systemctl start wepn-leds
+systemctl start wepn-mqtt
+systemctl start wepn-messages
 cd $PPROXY_HOME/setup/
 
 ##############################################################################
@@ -488,6 +492,18 @@ fi
 ##############################################################################
 cp $PPROXY_HOME/setup/if-up-wepn.sh /etc/network/if-up.d/wepn-iptables
 chmod +x /etc/network/if-up.d/wepn-iptables
+
+##############################################################################
+# Root-owned runtime dir for the routing rebuild lock + backend-ip cache
+# (prevent_location_issue.sh / iptables-flush.sh). Deliberately NOT /run/pproxy
+# (a systemd RuntimeDirectory= that services chown to their own user and delete
+# on stop) and NOT /run/lock (world-writable). tmpfiles.d recreates it on boot.
+##############################################################################
+mkdir -p /run/wepn
+chown root:root /run/wepn
+chmod 0755 /run/wepn
+echo 'd /run/wepn 0755 root root -' > /etc/tmpfiles.d/wepn-routing.conf
+systemd-tmpfiles --create /etc/tmpfiles.d/wepn-routing.conf 2>/dev/null || true
 
 # Fix the permissions
 /bin/bash /usr/local/sbin/permissions.sh

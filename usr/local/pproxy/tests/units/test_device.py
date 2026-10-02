@@ -168,13 +168,44 @@ class TestUPnP:
             with patch.object(device_instance, 'set_port_forward', return_value=True) as mock_spf:
                 result = device_instance.open_port(8080, "test")
                 assert result is True
-                mock_spf.assert_called_with("open", 8080, "test", 8080, device.DEFAULT_UPNP_TIMEOUT)
+                mock_spf.assert_called_with("open", 8080, "test", 8080, device.DEFAULT_UPNP_TIMEOUT,
+                                            protos=("TCP", "UDP"))
+
+    def test_open_port_tcp_only(self, device_instance):
+        with patch.object(device_instance, 'should_skip_upnp', return_value=False):
+            with patch.object(device_instance, 'set_port_forward', return_value=True) as mock_spf:
+                result = device_instance.open_port(8080, "test", timeout=300, protos=("TCP",))
+                assert result is True
+                mock_spf.assert_called_with("open", 8080, "test", 8080, 300, protos=("TCP",))
+
+    def test_open_port_retry_keeps_lease(self, device_instance):
+        # on SOAPError the retry must keep the requested lease first and
+        # only fall back to a permanent (0) lease if that also fails
+        device.upnp.soap.SOAPError = type('SOAPError', (Exception,), {})
+        with patch.object(device_instance, 'should_skip_upnp', return_value=False):
+            with patch.object(device_instance, 'set_port_forward') as mock_spf:
+                mock_spf.side_effect = [device.upnp.soap.SOAPError, True]
+                result = device_instance.open_port(8080, "test", timeout=300)
+                assert result is True
+                assert mock_spf.call_count == 2
+                mock_spf.assert_called_with("open", 8080, "test", 8080, 300,
+                                            retry=True, protos=("TCP", "UDP"))
+
+    def test_open_port_retry_falls_back_to_permanent(self, device_instance):
+        device.upnp.soap.SOAPError = type('SOAPError', (Exception,), {})
+        with patch.object(device_instance, 'should_skip_upnp', return_value=False):
+            with patch.object(device_instance, 'set_port_forward') as mock_spf:
+                mock_spf.side_effect = [device.upnp.soap.SOAPError, False, True]
+                result = device_instance.open_port(8080, "test", timeout=300)
+                assert result is True
+                mock_spf.assert_called_with("open", 8080, "test", 8080, 0,
+                                            retry=True, protos=("TCP", "UDP"))
 
     def test_close_port(self, device_instance):
         with patch.object(device_instance, 'should_skip_upnp', return_value=False):
             with patch.object(device_instance, 'set_port_forward') as mock_spf:
                 device_instance.close_port(8080)
-                mock_spf.assert_called_with("close", 8080, "")
+                mock_spf.assert_called_with("close", 8080, "", protos=("TCP", "UDP"))
 
     def test_check_igd_supports_portforward(self, device_instance):
         mock_igd = MagicMock()
@@ -195,6 +226,16 @@ class TestUPnP:
         with patch.object(device_instance, 'get_local_ip', return_value="1.2.3.4"):
             device_instance.set_port_forward("open", 8080, "test")
             assert mock_pm.AddPortMapping.call_count == 2
+
+    def test_set_port_forward_tcp_only(self, device_instance):
+        mock_pm = MagicMock()
+        mock_pm.AddPortMapping.return_value = True
+        device_instance.port_mappers = [mock_pm]
+        device_instance.igds = [MagicMock()]
+        with patch.object(device_instance, 'get_local_ip', return_value="1.2.3.4"):
+            device_instance.set_port_forward("open", 8080, "test", protos=("TCP",))
+            assert mock_pm.AddPortMapping.call_count == 1
+            assert mock_pm.AddPortMapping.call_args.kwargs["NewProtocol"] == "TCP"
 
     def test_set_port_forward_all_paths(self, device_instance):
         mock_pm = MagicMock()
@@ -450,6 +491,56 @@ class TestCommands:
         mock_ps.process_iter.return_value = [p]
         assert device_instance.get_process_cmd_by_pid(123) == ["cmd"]
         assert device_instance.get_process_cmd_by_pid(999) == [""]
+
+    def test_get_throttled_raw_caches_result(self, device_instance):
+        with patch.object(device_instance, 'execute_cmd_output') as mock_exec:
+            mock_exec.return_value = (b'throttled=0x50000', b'', 0, None)
+            first = device_instance.get_throttled_raw()
+            second = device_instance.get_throttled_raw()
+            assert first == '0x50000'
+            assert second == '0x50000'
+            mock_exec.assert_called_once()
+
+    def test_get_throttled_raw_refreshes_after_cache_expiry(self, device_instance):
+        with patch.object(device_instance, 'execute_cmd_output') as mock_exec, \
+                patch('device.time.time') as mock_time:
+            mock_exec.return_value = (b'throttled=0x0', b'', 0, None)
+            mock_time.return_value = 1000
+            device_instance.get_throttled_raw()
+            mock_time.return_value = 1000 + device.THROTTLE_CACHE_SECONDS_NORMAL + 1
+            device_instance.get_throttled_raw()
+            assert mock_exec.call_count == 2
+
+    def test_get_throttled_raw_polls_faster_while_active(self, device_instance):
+        with patch.object(device_instance, 'execute_cmd_output') as mock_exec, \
+                patch('device.time.time') as mock_time:
+            # bit 2 (currently throttled) set
+            mock_exec.return_value = (b'throttled=0x4', b'', 0, None)
+            mock_time.return_value = 1000
+            device_instance.get_throttled_raw()
+
+            # short delay: still under the slow TTL, but past the fast one
+            mock_time.return_value = 1000 + device.THROTTLE_CACHE_SECONDS_ACTIVE + 1
+            device_instance.get_throttled_raw()
+            assert mock_exec.call_count == 2
+
+    def test_get_throttled_raw_reverts_to_slow_once_clear(self, device_instance):
+        with patch.object(device_instance, 'execute_cmd_output') as mock_exec, \
+                patch('device.time.time') as mock_time:
+            mock_exec.return_value = (b'throttled=0x4', b'', 0, None)
+            mock_time.return_value = 1000
+            device_instance.get_throttled_raw()
+
+            mock_time.return_value = 1000 + device.THROTTLE_CACHE_SECONDS_ACTIVE + 1
+            mock_exec.return_value = (b'throttled=0x0', b'', 0, None)
+            device_instance.get_throttled_raw()
+            assert mock_exec.call_count == 2
+
+            # back to normal: should now hold the slow TTL again
+            mock_time.return_value = (1000 + device.THROTTLE_CACHE_SECONDS_ACTIVE + 1
+                                      + device.THROTTLE_CACHE_SECONDS_ACTIVE + 1)
+            device_instance.get_throttled_raw()
+            assert mock_exec.call_count == 2
 
     def test_mount_operations(self, device_instance):
         with patch.object(device_instance, 'execute_cmd_output') as mock_exec, \

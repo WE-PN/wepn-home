@@ -1,3 +1,4 @@
+CLAIMED_RECHECK_SECONDS = 30
 CONFIG_FILE = '/etc/pproxy/config.ini'
 CONFIG_SERVER_URL = "https://config.we-pn.com"
 CONNECTIVITY_TEST_URLS = [
@@ -12,13 +13,48 @@ CONNECTIVITY_TEST_URLS = [
 DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S.%f"
 DEFAULT_GET_TIMEOUT = 10
 DEFAULT_UPNP_TIMEOUT = 86400
+DIAG_LISTENER_DEADLINE_SECONDS = 120
+DIAG_LISTENER_ACCEPT_TIMEOUT_SECONDS = 30
 ERROR_LOG_FILE = "/var/local/pproxy/error.log"
 FORCE_SCREEN_ON = False
 HEALTHY_DIAG_CODE = 127
 HEARTBEATS_TO_WARM = 96
 LOG_CONFIG = "/etc/pproxy/logging.ini"
+MESSAGE_POLL_INTERVAL_SECONDS = 300
+MESSAGE_POLL_JITTER_SECONDS = 60
 METRICS_PORT = 8411
 METRICS_REPORT_INTERVAL_SECONDS = 14460
+MSG_CHANNEL_HANDSHAKE_TIMEOUT = 10
+# steady-state read timeout must exceed the client keepalive (60s) so healthy,
+# idle producers are not reaped; a silent/dead peer is closed after this
+MSG_CHANNEL_IDLE_TIMEOUT = 150
+MSG_CHANNEL_MAX_CONNECTIONS = 16
+MSG_CHANNEL_MAX_FRAME = 1048576
+MSG_CHANNEL_PROTOCOL_VERSION = 1
+MSG_CHANNEL_QUEUE_MAX = 10000
+MSG_CHANNEL_SOCKET = "/var/local/pproxy/msg_channel.sock"
+NOTIFY_DAILY_LIMIT = 120
+NOTIFY_EMAIL_COOLDOWN_SECONDS = 14400    # 4h
+NOTIFY_ENTRY_TTL_SECONDS = 604800        # 7 days
+NOTIFY_MAX_ENTRIES = 200
+NOTIFY_PUSH_COOLDOWN_SECONDS = 3600      # 1h
+NOTIFY_RESPONSE_COOLDOWN_SECONDS = 60    # default; overridable via config.ini
+PIN_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'  # matches device_key's alphabet
+PIN_LENGTH = 16                                     # 80 bits of entropy
+PIN_TOTP_STEP_SECONDS = 900                         # 15-minute cadence
+PIN_TOTP_WINDOW = 1                                 # ± steps tolerated (grace + clock drift)
+PIN_TOTP_CODE_MIN = 1111111111
+PIN_TOTP_CODE_MAX = 9999999999
+PIN_TOTP_PURPOSE_LOCAL_TOKEN = b"\x02"
 SERVICE_FILE_BASE = "/var/local/pproxy/"
 SKIP_OTA_CHECK = False
+# ad-hoc test port ("open-test-port" action)
+TEST_PORT_MIN = 5001
+TEST_PORT_MAX = 5500
+TEST_PORT_WINDOW_SECONDS = 180
+TEST_PORT_LEASE_MARGIN_SECONDS = 120     # UPnP lease = window + margin, router expires on crash
+TEST_PORT_ACCEPT_TIMEOUT_SECONDS = 5
+TEST_PORT_CONN_TIMEOUT_SECONDS = 5
+TEST_PORT_MAX_RECV_BYTES = 1024
+TEST_PORT_COOLDOWN_SECONDS = 30
 DEBUG_LOG_E2EE = False

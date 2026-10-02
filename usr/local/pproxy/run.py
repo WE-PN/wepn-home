@@ -133,6 +133,10 @@ if 1 == int(status.get('status', 'claimed')):
         status['status']['claimed'] = '0'
         status['status']['mqtt'] = '0'
         status['status']['state'] = '3'
+        # invalidate the pin too, same reason as pproxy.py's wipe_device
+        # handler: a leftover valid-format pin from the previous claim can
+        # otherwise be mistaken for current by a heartbeat racing the wipe
+        status['status']['pin'] = '00000000'
         write_ini_atomic(STATUS_FILE, status)
         # reboot to go into onboarding
         device.reboot()

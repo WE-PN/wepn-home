@@ -72,7 +72,7 @@ def test_init(mock_logger, mock_config):
 
 def test_cleanup(wp_diag):
     wp_diag.cleanup()
-    assert wp_diag.shutdown_listener is True
+    assert wp_diag.listener_stop.is_set()
 
 
 def test_sanitize_str(wp_diag):
@@ -93,57 +93,27 @@ def test_execute_cmd_error(mock_popen, wp_diag):
     wp_diag.logger.error.assert_any_call("Error happened in running command:ls -la")
 
 
-@patch('diag.socket.socket')
-def test_open_listener_timeout(mock_socket_class, wp_diag):
-    mock_socket = MagicMock()
-    mock_socket_class.return_value = mock_socket
-    # diag.py says TimeoutError but socket raises socket.timeout on settimeout(30)
-    # Actually diag.py catches TimeoutError which is standard in Python 3.10+ for socket timeouts
-    mock_socket.accept.side_effect = TimeoutError
-
-    # We need to make sure the loop terminates
-    wp_diag.shutdown_listener = False
-
-    # Mocking time to trigger shutdown
-    with patch('diag.time.time') as mock_time:
-        mock_time.side_effect = [1000, 1200]  # initial, after one loop
-        wp_diag.open_listener('localhost', 1234)
-
-    # Verify bind was called with expected host and port
-    # Note: open_listener converts port to int
-    mock_socket.bind.assert_called_once_with(('localhost', 1234))
-    mock_socket.listen.assert_called_once_with(1)
-    wp_diag.logger.debug.assert_any_call("listener timed out for port 1234")
-
-
-@patch('diag.socket.socket')
-def test_open_listener_success(mock_socket_class, wp_diag):
-    mock_socket = MagicMock()
-    mock_socket_class.return_value = mock_socket
-
-    mock_conn = MagicMock()
-    mock_addr = ('127.0.0.1', 54321)
-    mock_socket.accept.return_value = (mock_conn, mock_addr)
-    mock_conn.recv.return_value = b'test'
-
-    # Terminate after one accept
-    def side_effect(*args, **kwargs):
-        wp_diag.shutdown_listener = True
-        return mock_conn, mock_addr
-    mock_socket.accept.side_effect = side_effect
-
+@patch('diag.run_listener')
+def test_open_listener_delegates(mock_run_listener, wp_diag):
+    # the accept-loop behavior itself is tested in test_port_probe.py
     wp_diag.open_listener('localhost', 1234)
-
-    mock_conn.sendall.assert_called_once_with(b'test')
-    mock_conn.close.assert_called_once()
+    mock_run_listener.assert_called_once_with(
+        wp_diag.logger, 'localhost', 1234, wp_diag.listener_stop,
+        constants.DIAG_LISTENER_DEADLINE_SECONDS,
+        response_mode="echo",
+        accept_timeout=constants.DIAG_LISTENER_ACCEPT_TIMEOUT_SECONDS)
 
 
 @patch('diag.threading.Thread')
 def test_open_test_port(mock_thread, wp_diag):
     wp_diag.device.open_port.return_value = True
+    old_stop = wp_diag.listener_stop
+    old_stop.set()
     result = wp_diag.open_test_port(1234)
 
-    assert wp_diag.shutdown_listener is False
+    # a fresh, unset event is created per test
+    assert wp_diag.listener_stop is not old_stop
+    assert not wp_diag.listener_stop.is_set()
     mock_thread.assert_called_once()
     wp_diag.device.open_port.assert_called_once_with(port=1234, text='pproxy test port', timeout=10)
     assert result is True
@@ -151,7 +121,7 @@ def test_open_test_port(mock_thread, wp_diag):
 
 def test_close_test_port(wp_diag):
     wp_diag.close_test_port(1234)
-    assert wp_diag.shutdown_listener is True
+    assert wp_diag.listener_stop.is_set()
     wp_diag.device.close_port.assert_called_once_with(1234)
 
 

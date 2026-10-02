@@ -45,6 +45,12 @@ class Services:
         self.service_config = WStatus(logger, source_file=path)
         return
 
+    def get_service(self, service_name):
+        for service in self.services:
+            if service['name'] == service_name:
+                return service['obj']
+        return None
+
     def santizie_service_filename(self, filename):
         s = sanitize(filename)
         s = re.sub(r'[^a-zA-Z0-9]', '', s)

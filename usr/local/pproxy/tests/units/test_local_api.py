@@ -6,13 +6,16 @@ from unittest.mock import MagicMock, patch
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../local_server')))
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
+import pin_totp  # noqa: E402
 
-def _make_wstatus_mock(local_token='8675309', prev_token='', claimed='1',
+TEST_PIN = 'ABCDEFGHJKLMNPQR'
+
+
+def _make_wstatus_mock(pin=TEST_PIN, claimed='1',
                        e2e_key='testkey==', temporary_key='tmpkey'):
     mock = MagicMock()
     mock.get_field.side_effect = lambda s, f: {
-        ('status', 'local_token'): local_token,
-        ('status', 'prev_token'): prev_token,
+        ('status', 'pin'): pin,
         ('status', 'claimed'): claimed,
         ('status', 'e2e_key'): e2e_key,
         ('status', 'temporary_key'): temporary_key,
@@ -39,20 +42,44 @@ def api_module():
 # valid_token: correct format and value
 # ---------------------------------------------------------------------------
 
-def test_valid_token_matches_stored(api_module):
-    with patch.object(api_module, 'WStatus', return_value=_make_wstatus_mock('abc123')):
-        assert api_module.valid_token('abc123') is True
+def test_valid_token_accepts_current_step(api_module):
+    code = pin_totp.derive_local_token(TEST_PIN)
+    with patch.object(api_module, 'WStatus', return_value=_make_wstatus_mock()):
+        assert api_module.valid_token(str(code)) is True
 
 
 def test_valid_token_rejects_wrong_value(api_module):
-    with patch.object(api_module, 'WStatus', return_value=_make_wstatus_mock('abc123')):
-        assert api_module.valid_token('wrongtoken') is False
+    with patch.object(api_module, 'WStatus', return_value=_make_wstatus_mock()):
+        assert api_module.valid_token('1234567890') is False
 
 
-def test_valid_token_accepts_prev_token(api_module):
-    with patch.object(api_module, 'WStatus',
-                      return_value=_make_wstatus_mock('newtoken', prev_token='prevtoken')):
-        assert api_module.valid_token('prevtoken') is True
+def test_valid_token_accepts_previous_step(api_module):
+    # grace window: a value derived one step ago must still authenticate
+    code = pin_totp.derive_code(TEST_PIN, pin_totp.current_step() - 1,
+                                pin_totp.PIN_TOTP_PURPOSE_LOCAL_TOKEN)
+    with patch.object(api_module, 'WStatus', return_value=_make_wstatus_mock()):
+        assert api_module.valid_token(str(code)) is True
+
+
+def test_valid_token_rejects_two_steps_old(api_module):
+    # outside the +/-1 step tolerance window
+    code = pin_totp.derive_code(TEST_PIN, pin_totp.current_step() - 2,
+                                pin_totp.PIN_TOTP_PURPOSE_LOCAL_TOKEN)
+    with patch.object(api_module, 'WStatus', return_value=_make_wstatus_mock()):
+        assert api_module.valid_token(str(code)) is False
+
+
+def test_valid_token_rejects_missing_pin(api_module):
+    with patch.object(api_module, 'WStatus', return_value=_make_wstatus_mock(pin='')):
+        code = pin_totp.derive_local_token(TEST_PIN)
+        assert api_module.valid_token(str(code)) is False
+
+
+def test_valid_token_rejects_legacy_format_pin(api_module):
+    # pre-migration devices carry either the '00000000' fresh-install
+    # placeholder or an old-style random numeric pin - neither is valid-format
+    with patch.object(api_module, 'WStatus', return_value=_make_wstatus_mock(pin='00000000')):
+        assert api_module.valid_token('1234567890') is False
 
 
 def test_valid_token_rejects_none(api_module):
@@ -65,14 +92,16 @@ def test_valid_token_rejects_empty(api_module):
 
 def test_valid_token_rejects_special_chars(api_module):
     """Token with shell metacharacters must be rejected by format check."""
-    with patch.object(api_module, 'WStatus', return_value=_make_wstatus_mock("8675309")):
-        assert api_module.valid_token("8675309'; rm -rf /") is False
+    with patch.object(api_module, 'WStatus', return_value=_make_wstatus_mock()):
+        code = pin_totp.derive_local_token(TEST_PIN)
+        assert api_module.valid_token(f"{code}'; rm -rf /") is False
 
 
 def test_valid_token_rejects_quoted(api_module):
-    """Regression guard: shlex-quoted value must NOT match the stored raw token."""
-    with patch.object(api_module, 'WStatus', return_value=_make_wstatus_mock('8675309')):
-        assert api_module.valid_token("'8675309'") is False
+    """Regression guard: shlex-quoted value must NOT match the derived token."""
+    with patch.object(api_module, 'WStatus', return_value=_make_wstatus_mock()):
+        code = pin_totp.derive_local_token(TEST_PIN)
+        assert api_module.valid_token(f"'{code}'") is False
 
 
 # ---------------------------------------------------------------------------

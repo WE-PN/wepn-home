@@ -79,27 +79,37 @@ class Messages():
             self.logger.critical("Message " + str(id) + "was marked as read, but it was not pending")
         return response
 
-    def send_msg(self, text, destination="APP", cert_id="", secure=True, msg_type=""):
+    def send_msg(self, text, destination="APP", cert_id="", secure=True, msg_type="",
+                 extra_fields=None, expires_at=None):
+        # extra_fields: dict merged into message_body as-is, for structured
+        # plain-text payloads (not encrypted, so only use with secure=False)
+        # expires_at: expiry of the message record itself, set on the
+        # message (not inside message_body)
         nonce = ""
         if secure:
             secure_text, nonce = self.encrypt_message(text)
             text = base64.urlsafe_b64encode(secure_text).decode("utf-8")
             nonce = base64.urlsafe_b64encode(nonce).decode("utf-8")
+        message_body = {
+            "message_type": msg_type,
+            "message": text,
+            "is_secure": secure,
+            "cert_id": cert_id,
+            "nonce": nonce
+        }
+        if extra_fields:
+            message_body.update(extra_fields)
         url = self.config.get('django', 'url') + "/api/message/"
         data = {
             "serial_number": self.config.get('django', 'serial_number'),
             "device_key": self.config.get('django', 'device_key'),
-            "message_body": {
-                "message_type": msg_type,
-                "message": text,
-                "is_secure": secure,
-                "cert_id": cert_id,
-                "nonce": nonce
-            },
+            "message_body": message_body,
             "destination": destination.upper(),
             "is_read": False,
             "is_expired": False,
         }
+        if expires_at is not None:
+            data["expires_at"] = expires_at
         headers = {"Content-Type": "application/json"}
         data_json = json.dumps(data)
         response = requests.post(url, data=data_json, headers=headers, timeout=GET_TIMEOUT)

@@ -17,6 +17,7 @@ from device import Device  # nopep8 noqa
 from diag import WPDiag  # nopep8 noqa
 from services import Services  # nopep8 noqa
 from wstatus import WStatus  # nopep8 noqa
+import pin_totp  # nopep8 noqa
 
 try:
     from configparser import configparser
@@ -54,10 +55,10 @@ def valid_token(incoming):
     if not incoming or not str(incoming).isalnum():
         return False
     status = WStatus(logger)
-    valid_token = status.get_field('status', 'local_token')
-    prev_token = status.get_field('status', 'prev_token')
-    return (str(incoming) == str(valid_token) or
-            str(incoming) == str(prev_token))
+    pin = status.get_field('status', 'pin')
+    if not pin_totp.is_valid_pin_format(pin):
+        return False
+    return pin_totp.matches_any(pin, incoming)
 
 
 app = flask.Flask(__name__)

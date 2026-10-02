@@ -246,6 +246,10 @@ if not config.has_option('networking', 'uplink'):
     config.set('networking', 'uplink', 'tor')
 if not config.has_option('networking', 'routing-mode'):
     config.set('networking', 'routing-mode', 'geo')
+# in all-traffic mode, reject pproxy-owned UDP 80/443 so QUIC falls back to
+# tunnelled TCP instead of leaking direct; set false to let QUIC egress direct
+if not config.has_option('networking', 'block-quic'):
+    config.set('networking', 'block-quic', 'true')
 
 # WARP installation and config
 if not config.has_section('warp'):
@@ -259,7 +263,7 @@ else:
 
 # GCM is required, but older shadowsocks doesn't support it
 config.set('shadow', 'method', 'aes-256-gcm')
-status.set('status', 'sw', '1.20.9')
+status.set('status', 'sw', '1.21.2')
 
 with open(CONFIG_FILE, 'w') as configfile:
     config.write(configfile)

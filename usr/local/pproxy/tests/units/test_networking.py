@@ -34,8 +34,8 @@ def svc():
 
 def test_configure_calls_start_when_uplink_changes(svc):
     svc.service_config.get_field.side_effect = [
-        'tor', 'geo',   # prev: uplink, routing-mode
-        'warp', 'geo',  # new:  uplink, routing-mode
+        'tor', 'geo', 'true',    # prev: uplink, routing-mode, block-quic
+        'warp', 'geo', 'true',   # new
     ]
     with patch.object(svc, 'start') as mock_start:
         svc.configure('{"uplink": "warp"}')
@@ -44,8 +44,8 @@ def test_configure_calls_start_when_uplink_changes(svc):
 
 def test_configure_calls_start_when_mode_changes(svc):
     svc.service_config.get_field.side_effect = [
-        'tor', 'geo',
-        'tor', 'all-traffic',
+        'tor', 'geo', 'true',
+        'tor', 'all-traffic', 'true',
     ]
     with patch.object(svc, 'start') as mock_start:
         svc.configure('{"routing-mode": "all-traffic"}')
@@ -54,19 +54,55 @@ def test_configure_calls_start_when_mode_changes(svc):
 
 def test_configure_calls_start_when_both_change(svc):
     svc.service_config.get_field.side_effect = [
-        'tor', 'geo',
-        'warp', 'all-traffic',
+        'tor', 'geo', 'true',
+        'warp', 'all-traffic', 'true',
     ]
     with patch.object(svc, 'start') as mock_start:
         svc.configure('{"uplink": "warp", "routing-mode": "all-traffic"}')
     mock_start.assert_called_once()
 
 
+def test_configure_calls_start_when_block_quic_changes(svc):
+    svc.service_config.get_field.side_effect = [
+        'warp', 'all-traffic', 'true',
+        'warp', 'all-traffic', 'false',
+    ]
+    with patch.object(svc, 'start') as mock_start:
+        svc.configure('{"block-quic": "false"}')
+    mock_start.assert_called_once()
+
+
+def test_configure_tolerates_missing_block_quic_field(svc):
+    # networking.ini has never had block-quic set: configure() must not read it
+    # through get_field (which would log an "unknown field" error) or churn.
+    svc.service_config.has_option.side_effect = (
+        lambda section, field: field != 'block-quic')
+    svc.service_config.get_field.side_effect = ['tor', 'geo', 'tor', 'geo']
+    with patch.object(svc, 'start') as mock_start:
+        svc.configure('{"other": "value"}')
+    mock_start.assert_not_called()
+    assert all(c.args[1] != 'block-quic'
+               for c in svc.service_config.get_field.call_args_list)
+
+
 def test_configure_skips_start_when_nothing_changes(svc):
     svc.service_config.get_field.side_effect = [
-        'tor', 'geo',
-        'tor', 'geo',
+        'tor', 'geo', 'true',
+        'tor', 'geo', 'true',
     ]
     with patch.object(svc, 'start') as mock_start:
         svc.configure('{"other": "value"}')
     mock_start.assert_not_called()
+
+
+# ── start ────────────────────────────────────────────────────────────────────
+
+def test_start_rebuilds_routing_once_without_bare_flush(svc):
+    # prevent_location_issue.sh (1 9) self-flushes under its own flock; firing
+    # the bare flush (1 8) detached alongside it races and can drop the Pod to
+    # direct routing, so start() must invoke only "1 9".
+    with patch('networking.Device') as mock_device_cls:
+        svc.start()
+    dev = mock_device_cls.return_value
+    calls = [c.args[0] for c in dev.execute_setuid.call_args_list]
+    assert calls == ['1 9']
